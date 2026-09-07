@@ -4,11 +4,11 @@ import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
 import {
   Package, Search, Filter, Plus, ArrowRight, Download,
-  CheckCircle2, Clock, FileText, Eye, ShieldCheck, MapPin, X
+  CheckCircle2, Clock, FileText, Eye, ShieldCheck, MapPin, X, Trash2
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { formatCurrency, formatDate } from '@/lib/utils'
-
+import { deleteLocalShipment } from '@/lib/payments/manualOptions'
 import { useSession } from 'next-auth/react'
 
 interface Shipment {
@@ -230,6 +230,22 @@ export default function MyShipmentsPage() {
                         <ShieldCheck className="w-3.5 h-3.5" />
                       </Button>
                     )}
+
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        if (confirm(`Are you sure you want to delete / cancel shipment ${s.trackingNumber || s.id}?`)) {
+                          deleteLocalShipment(s.id)
+                          deleteLocalShipment(s.trackingNumber)
+                          setShipments((prev) => prev.filter((item) => item.id !== s.id && item.trackingNumber !== s.trackingNumber))
+                        }
+                      }}
+                      className="text-xs text-slate-400 hover:text-red-500 hover:bg-red-50"
+                      title="Delete / Cancel Shipment"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
                   </td>
                 </tr>
               ))}

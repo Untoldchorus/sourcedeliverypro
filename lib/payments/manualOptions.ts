@@ -91,7 +91,22 @@ export function getLocalShipments(): any[] {
     const raw = localStorage.getItem('sourcedeliverypro_admin_shipments') || localStorage.getItem('swiftship_admin_shipments')
     if (!raw) return []
     const parsed = JSON.parse(raw)
-    return Array.isArray(parsed) ? parsed : Object.values(parsed)
+    const rawList: any[] = Array.isArray(parsed) ? parsed : Object.values(parsed)
+    
+    // Strictly deduplicate by id and trackingNumber
+    const seen = new Set<string>()
+    const deduplicated: any[] = []
+    for (const item of rawList) {
+      if (!item) continue
+      const key = item.trackingNumber || item.id
+      if (key && !seen.has(key)) {
+        seen.add(key)
+        if (item.id && item.id !== key) seen.add(item.id)
+        if (item.trackingNumber && item.trackingNumber !== key) seen.add(item.trackingNumber)
+        deduplicated.push(item)
+      }
+    }
+    return deduplicated
   } catch {
     return []
   }
@@ -102,24 +117,46 @@ export function saveLocalShipment(shipment: any) {
   try {
     const existing = getLocalShipments()
     const id = shipment.id || shipment.trackingNumber
-    const index = existing.findIndex((s) => s.id === id || s.trackingNumber === id)
+    const trk = shipment.trackingNumber || shipment.id
+    const index = existing.findIndex((s) => s.id === id || s.trackingNumber === id || (trk && s.trackingNumber === trk))
     if (index >= 0) {
       existing[index] = { ...existing[index], ...shipment }
     } else {
       existing.unshift(shipment)
     }
 
-    // Save as both list and keyed map for backwards compatibility
+    // Save as clean list and mapped object
     const map: Record<string, any> = {}
     existing.forEach((item) => {
-      const key = item.trackingNumber || item.id
-      if (key) map[key] = item
-      if (item.id) map[item.id] = item
+      const primaryKey = item.trackingNumber || item.id
+      if (primaryKey) map[primaryKey] = item
     })
     localStorage.setItem('sourcedeliverypro_admin_shipments', JSON.stringify(map))
     localStorage.setItem('swiftship_admin_shipments', JSON.stringify(map))
   } catch (err) {
     console.error('Failed to save shipment to localStorage', err)
+  }
+}
+
+export function deleteLocalShipment(idOrTracking: string) {
+  if (typeof window === 'undefined' || !idOrTracking) return
+  try {
+    const target = idOrTracking.toLowerCase()
+    const existing = getLocalShipments().filter((s) => {
+      const sId = (s.id || '').toLowerCase()
+      const sTrk = (s.trackingNumber || '').toLowerCase()
+      return sId !== target && sTrk !== target
+    })
+
+    const map: Record<string, any> = {}
+    existing.forEach((item) => {
+      const primaryKey = item.trackingNumber || item.id
+      if (primaryKey) map[primaryKey] = item
+    })
+    localStorage.setItem('sourcedeliverypro_admin_shipments', JSON.stringify(map))
+    localStorage.setItem('swiftship_admin_shipments', JSON.stringify(map))
+  } catch (err) {
+    console.error('Failed to delete shipment from localStorage', err)
   }
 }
 
@@ -129,7 +166,20 @@ export function getLocalReceipts(): any[] {
     const raw = localStorage.getItem('sourcedeliverypro_admin_receipts') || localStorage.getItem('swiftship_admin_receipts')
     if (!raw) return []
     const parsed = JSON.parse(raw)
-    return Array.isArray(parsed) ? parsed : Object.values(parsed)
+    const rawList: any[] = Array.isArray(parsed) ? parsed : Object.values(parsed)
+    
+    // Deduplicate by receiptNumber or id
+    const seen = new Set<string>()
+    const deduplicated: any[] = []
+    for (const r of rawList) {
+      if (!r) continue
+      const key = r.receiptNumber || r.id
+      if (key && !seen.has(key)) {
+        seen.add(key)
+        deduplicated.push(r)
+      }
+    }
+    return deduplicated
   } catch {
     return []
   }
@@ -149,5 +199,21 @@ export function saveLocalReceipt(receipt: any) {
     localStorage.setItem('swiftship_admin_receipts', JSON.stringify(existing))
   } catch (err) {
     console.error('Failed to save receipt to localStorage', err)
+  }
+}
+
+export function deleteLocalReceipt(idOrNumber: string) {
+  if (typeof window === 'undefined' || !idOrNumber) return
+  try {
+    const target = idOrNumber.toLowerCase()
+    const existing = getLocalReceipts().filter((r) => {
+      const rId = (r.id || '').toLowerCase()
+      const rNum = (r.receiptNumber || '').toLowerCase()
+      return rId !== target && rNum !== target
+    })
+    localStorage.setItem('sourcedeliverypro_admin_receipts', JSON.stringify(existing))
+    localStorage.setItem('swiftship_admin_receipts', JSON.stringify(existing))
+  } catch (err) {
+    console.error('Failed to delete receipt from localStorage', err)
   }
 }

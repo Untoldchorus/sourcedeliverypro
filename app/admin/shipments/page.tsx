@@ -2,10 +2,10 @@
 
 import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { Box, Search, Edit3, CheckCircle2, Globe, MessageSquare, ExternalLink, MapPin } from 'lucide-react'
+import { Box, Search, Edit3, CheckCircle2, Globe, MessageSquare, ExternalLink, MapPin, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { formatCurrency } from '@/lib/utils'
-import { getLocalShipments, saveLocalShipment } from '@/lib/payments/manualOptions'
+import { getLocalShipments, saveLocalShipment, deleteLocalShipment } from '@/lib/payments/manualOptions'
 
 const ALL_STATUSES = [
   'DRAFT',
@@ -276,11 +276,26 @@ export default function AdminShipmentsPage() {
                       </div>
                     </td>
                     <td className="p-3 font-bold text-emerald-400">{formatCurrency(s.amount)}</td>
-                    <td className="p-3 text-right">
+                    <td className="p-3 text-right space-x-1.5">
                       <Button asChild size="sm" className="bg-[#6B2737] hover:bg-[#521b28] text-white font-bold text-xs">
                         <Link href={`/admin/shipments/${s.id || s.trackingNumber}`}>
                           <Edit3 className="w-3.5 h-3.5 mr-1" /> Edit All
                         </Link>
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          if (confirm(`Permanently delete shipment ${s.trackingNumber || s.id}?`)) {
+                            deleteLocalShipment(s.id)
+                            deleteLocalShipment(s.trackingNumber)
+                            setShipments((prev) => prev.filter((item) => item.id !== s.id && item.trackingNumber !== s.trackingNumber))
+                          }
+                        }}
+                        className="text-slate-400 hover:text-red-400 hover:bg-red-500/10 text-xs p-2"
+                        title="Delete Shipment Record"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
                       </Button>
                     </td>
                   </tr>

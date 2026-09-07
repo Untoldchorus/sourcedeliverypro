@@ -28,20 +28,20 @@ export default function NewShipmentPage() {
   const [formData, setFormData] = useState({
     senderName: '',
     senderEmail: '',
-    senderPhone: '+1 555-0199',
-    senderAddress: '450 Logistics Blvd, Suite 200',
-    senderCity: 'New York, US',
+    senderPhone: '',
+    senderAddress: '',
+    senderCity: '',
 
-    recipientName: 'Sarah Jenkins',
-    recipientEmail: 'sarah.jenkins@example.com',
-    recipientPhone: '+44 20 7946 0991',
-    recipientAddress: '12 Canary Wharf, Floor 4',
-    recipientCity: 'London, GB',
+    recipientName: '',
+    recipientEmail: '',
+    recipientPhone: '',
+    recipientAddress: '',
+    recipientCity: '',
 
-    weight: '3.5',
-    dimensions: '35x25x15 cm',
+    weight: '',
+    dimensions: '',
     service: 'INTERNATIONAL_EXPRESS',
-    description: 'Commercial parcel with documents & samples',
+    description: '',
   })
 
   // Prefill sender from session if available
@@ -49,14 +49,8 @@ export default function NewShipmentPage() {
     if (session?.user) {
       setFormData((prev) => ({
         ...prev,
-        senderName: prev.senderName || session.user?.name || 'Customer Shipper',
-        senderEmail: prev.senderEmail || session.user?.email || 'customer@sourcedeliverypro.com',
-      }))
-    } else {
-      setFormData((prev) => ({
-        ...prev,
-        senderName: prev.senderName || 'John Doe',
-        senderEmail: prev.senderEmail || 'john@example.com',
+        senderName: prev.senderName || session.user?.name || '',
+        senderEmail: prev.senderEmail || session.user?.email || '',
       }))
     }
   }, [session])
@@ -81,6 +75,7 @@ export default function NewShipmentPage() {
       id: shipmentId,
       trackingNumber,
       status: 'PENDING_PAYMENT',
+      userId: session?.user?.id || '',
       sender: formData.senderName,
       senderName: formData.senderName,
       senderEmail: formData.senderEmail,
