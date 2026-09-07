@@ -49,7 +49,7 @@ export default function HomePage() {
                 <input
                   name="number"
                   type="text"
-                  placeholder="e.g. SDP8F4K92LM381"
+                  placeholder="Enter AWB or tracking number (e.g. SDP...)"
                   className="flex-1 px-4 py-3 rounded-xl font-mono text-sm text-white placeholder-white/40 focus:outline-none"
                   style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)' }}
                 />
@@ -143,7 +143,7 @@ export default function HomePage() {
           <div className="flex flex-col sm:flex-row gap-3 max-w-xl mx-auto">
             <input
               type="text"
-              placeholder="Enter tracking number (e.g. SDP8F4K92LM381)"
+              placeholder="Enter AWB or tracking number (e.g. SDP...)"
               className="flex-1 px-4 py-3 rounded-xl border font-mono text-sm focus:outline-none focus:ring-2 focus:ring-oxblood"
               style={{ borderColor: '#6B2737' }}
               onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -200,27 +200,90 @@ export default function HomePage() {
               <img src="/images/global_network.jpg" alt="Global logistics network" className="w-full h-full object-cover" />
             </div>
 
-            <div className="rounded-3xl p-8" style={{ background: '#F5EDE8', border: '1px solid #DDD0C8' }}>
-              <p className="text-xs font-bold uppercase tracking-wider mb-4" style={{ color: '#6B2737' }}>Live Shipments Dashboard Preview</p>
-            <div className="space-y-4">
-              {[
-                { awb: 'SDP8F4K92LM381', route: 'New York → London', status: 'IN TRANSIT', pct: 70, statusColor: '#3B82F6' },
-                { awb: 'SDP993C104KL22', route: 'New York → Lagos', status: 'CUSTOMS', pct: 55, statusColor: '#F59E0B' },
-                { awb: 'SDP77B219KP440', route: 'Toronto → Frankfurt', status: 'DELIVERED', pct: 100, statusColor: '#10B981' },
-              ].map((s) => (
-                <div key={s.awb} className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-xs font-mono font-bold" style={{ color: '#1B2A4A' }}>{s.awb}</span>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full text-white" style={{ background: s.statusColor }}>{s.status}</span>
-                  </div>
-                  <p className="text-xs font-semibold mb-2" style={{ color: '#243660' }}>{s.route}</p>
-                  <div className="w-full rounded-full h-1.5" style={{ background: '#EDE8E4' }}>
-                    <div className="h-1.5 rounded-full transition-all" style={{ width: `${s.pct}%`, background: s.statusColor }} />
-                  </div>
+            <div className="rounded-3xl p-7 bg-white border border-slate-200/80 shadow-xl overflow-hidden relative">
+              {/* Top accent line */}
+              <div className="absolute top-0 left-0 right-0 h-1.5" style={{ background: 'linear-gradient(90deg, #1B2A4A, #6B2737)' }} />
+
+              <div className="flex items-center justify-between gap-2 mb-5">
+                <div className="flex items-center gap-2">
+                  <span className="relative flex h-2.5 w-2.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                  </span>
+                  <span className="text-[11px] font-extrabold uppercase tracking-wider text-emerald-700">Live Logistics Telemetry</span>
                 </div>
-              ))}
+                <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+                  Global Hubs Active
+                </span>
+              </div>
+
+              <h3 className="text-xl font-black mb-1" style={{ color: '#1B2A4A' }}>
+                Precision Delivery &amp; Chain of Custody
+              </h3>
+              <p className="text-xs mb-6 leading-relaxed" style={{ color: '#5A6B80' }}>
+                Real-time tracking, digital waybill generation, and automated customs clearance across our worldwide air and ground network.
+              </p>
+
+              {/* 2x2 Metric Grid */}
+              <div className="grid grid-cols-2 gap-3 mb-6">
+                <div className="p-4 rounded-2xl border border-slate-100 shadow-sm" style={{ background: '#FAF7F5' }}>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Air Transit</span>
+                    <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white" style={{ background: '#6B2737' }}>
+                      <Plane className="w-3.5 h-3.5" />
+                    </div>
+                  </div>
+                  <div className="text-2xl font-black tracking-tight" style={{ color: '#1B2A4A' }}>1–3 Days</div>
+                  <div className="text-[11px] text-slate-500 mt-0.5">Express global corridors</div>
+                </div>
+
+                <div className="p-4 rounded-2xl border border-slate-100 shadow-sm" style={{ background: '#FAF7F5' }}>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">On-Time SLA</span>
+                    <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white" style={{ background: '#1B2A4A' }}>
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                    </div>
+                  </div>
+                  <div className="text-2xl font-black tracking-tight" style={{ color: '#1B2A4A' }}>99.4%</div>
+                  <div className="text-[11px] text-slate-500 mt-0.5">Verified milestone compliance</div>
+                </div>
+
+                <div className="p-4 rounded-2xl border border-slate-100 shadow-sm" style={{ background: '#FAF7F5' }}>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Global Coverage</span>
+                    <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white" style={{ background: '#1B2A4A' }}>
+                      <Globe className="w-3.5 h-3.5" />
+                    </div>
+                  </div>
+                  <div className="text-2xl font-black tracking-tight" style={{ color: '#1B2A4A' }}>220+</div>
+                  <div className="text-[11px] text-slate-500 mt-0.5">Countries &amp; territories</div>
+                </div>
+
+                <div className="p-4 rounded-2xl border border-slate-100 shadow-sm" style={{ background: '#FAF7F5' }}>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Security</span>
+                    <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white" style={{ background: '#6B2737' }}>
+                      <Package className="w-3.5 h-3.5" />
+                    </div>
+                  </div>
+                  <div className="text-2xl font-black tracking-tight" style={{ color: '#1B2A4A' }}>100%</div>
+                  <div className="text-[11px] text-slate-500 mt-0.5">Digital POD &amp; scan telemetry</div>
+                </div>
+              </div>
+
+              {/* Action Banner */}
+              <div className="rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3 text-white" style={{ background: 'linear-gradient(135deg, #1B2A4A 0%, #243660 100%)' }}>
+                <div>
+                  <div className="text-xs font-bold">Ready to dispatch a consignment?</div>
+                  <div className="text-[11px] text-slate-300">Get upfront rates or track live shipments.</div>
+                </div>
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                  <Button asChild size="sm" className="w-full sm:w-auto text-white font-bold text-xs" style={{ background: '#6B2737' }}>
+                    <Link href="/shipping/quote">Get Quote <ArrowRight className="ml-1 w-3 h-3" /></Link>
+                  </Button>
+                </div>
+              </div>
             </div>
-          </div>
         </div>
       </div>
     </section>
