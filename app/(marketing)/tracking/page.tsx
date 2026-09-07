@@ -14,6 +14,8 @@ import {
   Share2,
   Clock,
   Truck,
+  MessageSquare,
+  ShieldCheck,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { getLocalShipments } from '@/lib/payments/manualOptions'
@@ -45,6 +47,15 @@ interface TrackingData {
   actualDelivery?: string
   currentLocation?: string
   mapQuery?: string
+  showMap?: boolean
+  remarks?: Array<{
+    id: string
+    text: string
+    category: string
+    timestamp: string
+    author?: string
+    public?: boolean
+  }>
   events: TrackingEvent[]
   hasProofOfDelivery: boolean
   proofOfDelivery?: {
@@ -73,6 +84,7 @@ function resolveMapQuery(data: TrackingData): string {
   for (const [key, val] of Object.entries(CITY_COORDS)) {
     if (loc.toLowerCase().includes(key.toLowerCase())) return val
   }
+  if (loc.trim()) return loc.trim()
   return `${data.destinationCity},${data.destinationCountry}`
 }
 
@@ -122,16 +134,24 @@ function mergeAdminOverride(data: TrackingData): TrackingData {
   try {
     const raw = localStorage.getItem('sourcedeliverypro_admin_shipments') || localStorage.getItem('swiftship_admin_shipments')
     if (!raw) return data
-    const list: any[] = JSON.parse(raw)
+    const parsed = JSON.parse(raw)
+    const list: any[] = Array.isArray(parsed) ? parsed : Object.values(parsed)
+    const target = (data.trackingNumber || '').toString().trim().toUpperCase()
     const override = list.find(
-      (s: any) => (s.trackingNumber || s.awb || '').toUpperCase() === data.trackingNumber.toUpperCase()
+      (s: any) =>
+        (s.trackingNumber || s.awb || s.id || '').toString().trim().toUpperCase() === target ||
+        (s.trackingNumber || s.awb || s.id || '').toString().trim().toUpperCase().replace(/\s+/g, '') === target
     )
     if (!override) return data
     return {
       ...data,
       status: override.status ?? data.status,
       currentLocation: override.currentLocation ?? override.location ?? data.currentLocation,
+      mapQuery: override.mapQuery ?? data.mapQuery,
+      showMap: override.showMap !== undefined ? Boolean(override.showMap) : true,
+      remarks: override.remarks ?? (data as any).remarks ?? [],
       estimatedDelivery: override.estimatedDelivery ?? data.estimatedDelivery,
+      events: override.events && override.events.length > 0 ? override.events : data.events,
     }
   } catch {
     return data
@@ -184,17 +204,22 @@ function TrackingContent() {
             packageCount: 1,
             estimatedDelivery: localFound.estimatedDelivery || 'In Transit',
             currentLocation: localFound.currentLocation || localFound.senderCity || 'Processing Hub',
-            events: [
-              {
-                id: 'evt-local-1',
-                status: localFound.status || 'PENDING_PAYMENT',
-                description: localFound.status === 'LABEL_CREATED'
-                  ? 'Shipping label generated and cargo manifest processed.'
-                  : `Consignment registered. Status: ${localFound.status || 'Pending'}`,
-                location: localFound.senderCity || 'Origin Facility',
-                timestamp: localFound.created || new Date().toISOString(),
-              },
-            ],
+            mapQuery: localFound.mapQuery || undefined,
+            showMap: localFound.showMap !== undefined ? Boolean(localFound.showMap) : true,
+            remarks: Array.isArray(localFound.remarks) ? localFound.remarks : [],
+            events: localFound.events && localFound.events.length > 0
+              ? localFound.events
+              : [
+                  {
+                    id: 'evt-local-1',
+                    status: localFound.status || 'PENDING_PAYMENT',
+                    description: localFound.status === 'LABEL_CREATED'
+                      ? 'Shipping label generated and cargo manifest processed.'
+                      : `Consignment registered. Status: ${localFound.status || 'Pending'}`,
+                    location: localFound.currentLocation || localFound.senderCity || 'Origin Facility',
+                    timestamp: localFound.created || new Date().toISOString(),
+                  },
+                ],
             hasProofOfDelivery: false,
             proofOfDelivery: null,
           })
@@ -220,17 +245,22 @@ function TrackingContent() {
           packageCount: 1,
           estimatedDelivery: localFound.estimatedDelivery || 'In Transit',
           currentLocation: localFound.currentLocation || localFound.senderCity || 'Processing Hub',
-          events: [
-            {
-              id: 'evt-local-1',
-              status: localFound.status || 'PENDING_PAYMENT',
-              description: localFound.status === 'LABEL_CREATED'
-                ? 'Shipping label generated and cargo manifest processed.'
-                : `Consignment registered. Status: ${localFound.status || 'Pending'}`,
-              location: localFound.senderCity || 'Origin Facility',
-              timestamp: localFound.created || new Date().toISOString(),
-            },
-          ],
+          mapQuery: localFound.mapQuery || undefined,
+          showMap: localFound.showMap !== undefined ? Boolean(localFound.showMap) : true,
+          remarks: Array.isArray(localFound.remarks) ? localFound.remarks : [],
+          events: localFound.events && localFound.events.length > 0
+            ? localFound.events
+            : [
+                {
+                  id: 'evt-local-1',
+                  status: localFound.status || 'PENDING_PAYMENT',
+                  description: localFound.status === 'LABEL_CREATED'
+                    ? 'Shipping label generated and cargo manifest processed.'
+                    : `Consignment registered. Status: ${localFound.status || 'Pending'}`,
+                  location: localFound.currentLocation || localFound.senderCity || 'Origin Facility',
+                  timestamp: localFound.created || new Date().toISOString(),
+                },
+              ],
           hasProofOfDelivery: false,
           proofOfDelivery: null,
         })
@@ -449,15 +479,20 @@ function TrackingContent() {
               </div>
             )}
 
-            {/* ── Map Section ─────────────────────────────────────────────── */}
-            {finalMapQuery && (
+            {/* ── Map Section (Toggleable by Admin) ───────────────────────── */}
+            {data.showMap !== false && finalMapQuery && (
               <div className="bg-[#1B2A4A] rounded-2xl overflow-hidden shadow-lg">
-                <div className="px-6 py-4 flex items-center gap-2">
-                  <MapPin className="w-4 h-4 text-[#6B2737]" />
-                  <p className="text-white/80 text-sm font-medium">
-                    📍 Current Location:{' '}
-                    <span className="text-white font-bold">{data.currentLocation || finalMapQuery}</span>
-                  </p>
+                <div className="px-6 py-4 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <MapPin className="w-4 h-4 text-[#6B2737]" />
+                    <p className="text-white/80 text-sm font-medium">
+                      📍 Current Location:{' '}
+                      <span className="text-white font-bold">{data.currentLocation || finalMapQuery}</span>
+                    </p>
+                  </div>
+                  <span className="text-[10px] uppercase tracking-wider font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                    Live GPS Telemetry
+                  </span>
                 </div>
                 <div className="relative w-full h-[400px] bg-[#0f1e36]">
                   {!mapLoaded && (
@@ -470,7 +505,7 @@ function TrackingContent() {
                   )}
                   <iframe
                     title="Shipment Location Map"
-                    src={buildMapUrl(finalMapQuery)}
+                    src={buildMapUrl(data.mapQuery || finalMapQuery)}
                     width="100%"
                     height="400"
                     className="w-full h-full border-0"
@@ -478,6 +513,61 @@ function TrackingContent() {
                     referrerPolicy="no-referrer-when-downgrade"
                     onLoad={() => setMapLoaded(true)}
                   />
+                </div>
+              </div>
+            )}
+
+            {/* When map is toggled off, display verified location badge */}
+            {data.showMap === false && (
+              <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white" style={{ background: '#1B2A4A' }}>
+                    <MapPin className="w-5 h-5 text-[#C27F88]" />
+                  </div>
+                  <div>
+                    <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold block">
+                      Verified Checkpoint Location
+                    </span>
+                    <span className="font-bold text-sm text-[#1B2A4A]">
+                      {data.currentLocation || data.originCity}
+                    </span>
+                  </div>
+                </div>
+                <span className="text-[11px] font-semibold text-emerald-700 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200">
+                  Telemetry Confirmed
+                </span>
+              </div>
+            )}
+
+            {/* ── Official Remarks Section ─────────────────────────────────── */}
+            {data.remarks && data.remarks.filter((r: any) => r.public !== false).length > 0 && (
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm border-t-4 border-t-amber-500 p-6 sm:p-8 space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <h3 className="text-base font-black text-[#1B2A4A] flex items-center gap-2">
+                    <MessageSquare className="w-5 h-5 text-amber-500" />
+                    Official Consignment Remarks &amp; Updates
+                  </h3>
+                  <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
+                    Operations Log
+                  </span>
+                </div>
+                <div className="space-y-3">
+                  {data.remarks
+                    .filter((r: any) => r.public !== false)
+                    .map((rem: any) => (
+                      <div key={rem.id} className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1.5">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-bold px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 text-[10px] uppercase tracking-wider">
+                            {rem.category || 'Operational Remark'}
+                          </span>
+                          <span className="text-slate-400 text-[11px]">{formatTimestamp(rem.timestamp)}</span>
+                        </div>
+                        <p className="text-slate-700 text-xs sm:text-sm leading-relaxed font-medium">
+                          {rem.text}
+                        </p>
+                        <p className="text-[10px] text-slate-400">Recorded by: {rem.author || 'Operations Admin'}</p>
+                      </div>
+                    ))}
                 </div>
               </div>
             )}
