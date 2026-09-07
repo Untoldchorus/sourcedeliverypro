@@ -7,6 +7,7 @@ import {
   MapPin, Phone, Search
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { TestimonialsCarousel } from '@/components/testimonials/TestimonialsCarousel'
 
 export default function HomePage() {
   return (
@@ -313,6 +314,9 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+
+      {/* ── Customer Testimonials Carousel ── */}
+      <TestimonialsCarousel />
 
       {/* ── CTA Banner ── */}
       <section className="py-20 text-white text-center" style={{ background: 'linear-gradient(135deg, #4A1520 0%, #6B2737 50%, #4A1520 100%)' }}>
