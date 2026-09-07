@@ -170,8 +170,11 @@ export default function AdminPaymentsPage() {
   const isPendingApproval = (p: any) =>
     p.status === 'PAYMENT_SUBMITTED' ||
     p.status === 'AWAITING_ADMIN_APPROVAL' ||
-    p.status === 'AWAITING_CONFIRMATION'
-  const isPendingPayment = (p: any) => p.status === 'PENDING_PAYMENT' || p.status === 'DRAFT'
+    p.status === 'AWAITING_CONFIRMATION' ||
+    p.status === 'PROCESSING' ||
+    Boolean(p.paymentTxId && p.status !== 'LABEL_CREATED' && p.status !== 'APPROVED' && p.status !== 'PAYMENT_REJECTED' && p.status !== 'REJECTED')
+  const isPendingPayment = (p: any) =>
+    (p.status === 'PENDING_PAYMENT' || p.status === 'DRAFT') && !p.paymentTxId
   const isApproved = (p: any) => p.status === 'LABEL_CREATED' || p.status === 'APPROVED' || p.status === 'IN_TRANSIT' || p.status === 'DELIVERED' || p.receiptGenerated
   const isRejected = (p: any) => p.status === 'PAYMENT_REJECTED' || p.status === 'REJECTED'
 
@@ -256,7 +259,7 @@ export default function AdminPaymentsPage() {
         <div className="flex flex-wrap items-center gap-2 border-b border-slate-800 pb-4 text-xs font-bold">
           {[
             { key: 'ALL', label: 'All Transactions' },
-            { key: 'PAYMENT_SUBMITTED', label: `Awaiting Approval (${pendingApprovalCount})` },
+            { key: 'PAYMENT_SUBMITTED', label: `Awaiting Confirmation (${pendingApprovalCount})` },
             { key: 'PENDING_PAYMENT', label: `Pending Payment (${pendingPaymentCount})` },
             { key: 'APPROVED', label: `Approved & Receipts (${approvedCount})` },
             { key: 'REJECTED', label: 'Rejected' },

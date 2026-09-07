@@ -38,18 +38,23 @@ export async function GET(
       )
     }
 
-    // Public sanitized representation (does not expose full sender/recipient private details)
+    // Public sanitized representation
     return NextResponse.json({
       success: true,
       data: {
+        id: shipment.id,
+        shipmentNumber: shipment.shipmentNumber,
         trackingNumber: shipment.trackingNumber,
         status: shipment.status,
         serviceType: shipment.serviceType,
+        senderName: shipment.senderName,
+        recipientName: shipment.recipientName,
         originCity: shipment.senderCity,
         originCountry: shipment.senderCountry,
         destinationCity: shipment.recipientCity,
         destinationCountry: shipment.recipientCountry,
         weight: shipment.weight,
+        totalAmount: shipment.totalAmount,
         packageCount: shipment.packageCount,
         estimatedDelivery: shipment.estimatedDelivery,
         actualDelivery: shipment.actualDelivery,

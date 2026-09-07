@@ -9,6 +9,36 @@ import {
 } from '@/lib/tracking'
 import { calculateShippingRate } from '@/lib/pricing'
 
+export function normalizeServiceType(val?: string): string {
+  if (!val) return 'INTERNATIONAL_EXPRESS'
+  const v = val.toUpperCase().trim()
+  if (v === 'STANDARD_AIR' || v === 'STANDARD') return 'STANDARD'
+  if (v === 'HEAVY_FREIGHT' || v === 'FREIGHT') return 'FREIGHT'
+  if (v === 'DOMESTIC_EXPRESS' || v === 'EXPRESS') return 'EXPRESS'
+  if (v === 'DOMESTIC_STANDARD' || v === 'ECONOMY_GROUND' || v === 'ECONOMY') return 'ECONOMY'
+  if (v === 'SAME_DAY') return 'SAME_DAY'
+  if (v === 'NEXT_DAY') return 'NEXT_DAY'
+  if (v === 'PRIORITY') return 'PRIORITY'
+  if (v === 'INTERNATIONAL_STANDARD') return 'INTERNATIONAL_STANDARD'
+  return 'INTERNATIONAL_EXPRESS'
+}
+
+export function normalizeShipmentStatus(val?: string): string {
+  if (!val) return 'PENDING_PAYMENT'
+  const v = val.toUpperCase().trim()
+  if (v === 'PAYMENT_SUBMITTED' || v === 'AWAITING_CONFIRMATION' || v === 'AWAITING_ADMIN_APPROVAL') {
+    return 'PROCESSING'
+  }
+  const valid = [
+    'DRAFT', 'PENDING_PAYMENT', 'PAYMENT_FAILED', 'LABEL_CREATED',
+    'PICKUP_SCHEDULED', 'PICKED_UP', 'PROCESSING', 'IN_TRANSIT',
+    'ARRIVED_AT_FACILITY', 'DEPARTED_FACILITY', 'CUSTOMS_CLEARANCE',
+    'CUSTOMS_HOLD', 'OUT_FOR_DELIVERY', 'DELIVERED', 'EXCEPTION',
+    'RETURNED', 'CANCELLED'
+  ]
+  return valid.includes(v) ? v : 'PENDING_PAYMENT'
+}
+
 export async function POST(request: NextRequest) {
   let body: any = {}
   try {
@@ -30,16 +60,19 @@ export async function POST(request: NextRequest) {
     const recipientCountry = (body.recipientCountry || 'GB').trim()
 
     const weightNum = parseFloat(body.weight) || 3.5
-    const serviceType = body.serviceType || body.service || 'INTERNATIONAL_EXPRESS'
+    const serviceType = normalizeServiceType(body.serviceType || body.service)
+    const shipmentStatus = normalizeShipmentStatus(body.status || 'PENDING_PAYMENT')
     const trackingNumber = (body.trackingNumber || generateTrackingNumber()).trim().toUpperCase()
     const shipmentNumber = (body.id || body.shipmentNumber || generateShipmentNumber()).trim()
     const invoiceNumber = generateInvoiceNumber()
-    const paymentReference = generatePaymentReference()
+    const paymentReference = (body.paymentTxId || generatePaymentReference()).trim()
 
     let totalAmount = parseFloat(body.amount) || parseFloat(body.totalAmount)
     if (!totalAmount || isNaN(totalAmount)) {
       totalAmount = Math.round((weightNum * 25 + 40) * 100) / 100
     }
+
+    const hasPaymentSubmitted = body.status === 'PAYMENT_SUBMITTED' || Boolean(body.paymentTxId)
 
     // Database transaction to guarantee consistency
     const result = await db.$transaction(async (tx) => {
@@ -47,7 +80,7 @@ export async function POST(request: NextRequest) {
         data: {
           shipmentNumber,
           trackingNumber,
-          status: (body.status as any) || 'PENDING_PAYMENT',
+          status: shipmentStatus as any,
           serviceType: serviceType as any,
 
           // Sender
@@ -110,8 +143,10 @@ export async function POST(request: NextRequest) {
       await tx.trackingEvent.create({
         data: {
           shipmentId: shipment.id,
-          status: 'DRAFT',
-          description: 'Shipment order created, awaiting payment confirmation and dispatch.',
+          status: shipmentStatus as any,
+          description: hasPaymentSubmitted
+            ? `Shipment order created with payment verification ref ${body.paymentTxId || 'Manual'}. Awaiting confirmation.`
+            : 'Shipment order created, awaiting payment confirmation and dispatch.',
           city: senderCity,
           country: senderCountry,
         },
@@ -124,8 +159,14 @@ export async function POST(request: NextRequest) {
           shipmentId: shipment.id,
           amount: totalAmount,
           currency: 'USD',
-          status: 'PENDING',
-          provider: 'MANUAL',
+          status: hasPaymentSubmitted ? 'PROCESSING' : 'PENDING',
+          provider: body.paymentMethod || 'MANUAL',
+          metadata: body.paymentTxId ? {
+            paymentTxId: body.paymentTxId,
+            paymentMethod: body.paymentMethod || 'Manual Payment',
+            paymentPayer: body.paymentPayer || senderName,
+            submittedAt: new Date().toISOString(),
+          } : undefined,
         },
       })
 
@@ -196,12 +237,31 @@ export async function GET(request: NextRequest) {
           orderBy: { timestamp: 'desc' },
         },
         proofOfDelivery: true,
+        payment: true,
+        invoice: true,
       },
+    })
+
+    const data = dbShipments.map((s) => {
+      const paymentMetadata = (s.payment?.metadata as any) || {}
+      const hasPaymentTx = Boolean(
+        (s.payment?.paymentReference && !s.payment.paymentReference.startsWith('PAY-')) ||
+        paymentMetadata.paymentTxId
+      )
+      const isAwaitingVerification = s.status === 'PROCESSING' || (s.status === 'PENDING_PAYMENT' && hasPaymentTx)
+
+      return {
+        ...s,
+        displayStatus: isAwaitingVerification ? 'PAYMENT_SUBMITTED' : s.status,
+        paymentTxId: paymentMetadata.paymentTxId || (s.payment?.paymentReference && !s.payment.paymentReference.startsWith('PAY-') ? s.payment.paymentReference : undefined),
+        paymentMethod: paymentMetadata.paymentMethod || s.payment?.provider,
+        paymentPayer: paymentMetadata.paymentPayer || s.senderName,
+      }
     })
 
     return NextResponse.json({
       success: true,
-      data: dbShipments,
+      data,
     })
   } catch (error) {
     return NextResponse.json({
@@ -278,11 +338,15 @@ export async function PATCH(request: NextRequest) {
     }
 
     const updateData: any = {}
-    if (body.status) updateData.status = body.status
+    if (body.status) {
+      updateData.status = normalizeShipmentStatus(body.status)
+    }
     if (body.trackingNumber && body.trackingNumber.startsWith('SDP') && !body.trackingNumber.includes('Pending')) {
       updateData.trackingNumber = body.trackingNumber
     }
-    if (body.serviceType || body.service) updateData.serviceType = body.serviceType || body.service
+    if (body.serviceType || body.service) {
+      updateData.serviceType = normalizeServiceType(body.serviceType || body.service)
+    }
     if (body.weight) updateData.weight = parseFloat(body.weight) || shipment.weight
     if (body.amount || body.totalAmount) updateData.totalAmount = parseFloat(body.amount || body.totalAmount) || shipment.totalAmount
     if (body.senderCity) updateData.senderCity = body.senderCity
@@ -296,8 +360,26 @@ export async function PATCH(request: NextRequest) {
         data: updateData,
       })
 
-      // If status changed to LABEL_CREATED or DELIVERED, mark payment & invoice as PAID
-      if (['LABEL_CREATED', 'DELIVERED'].includes(body.status)) {
+      // If payment submission info provided, update payment record
+      if (body.paymentTxId || body.paymentMethod || body.status === 'PAYMENT_SUBMITTED') {
+        await tx.payment.updateMany({
+          where: { shipmentId: shipment.id },
+          data: {
+            status: 'PROCESSING',
+            ...(body.paymentTxId ? { paymentReference: body.paymentTxId } : {}),
+            provider: body.paymentMethod || 'MANUAL',
+            metadata: {
+              paymentTxId: body.paymentTxId,
+              paymentMethod: body.paymentMethod,
+              paymentPayer: body.paymentPayer,
+              submittedAt: new Date().toISOString(),
+            },
+          },
+        }).catch(() => null)
+      }
+
+      // If status changed to LABEL_CREATED, DELIVERED, or APPROVED, mark payment & invoice as PAID
+      if (['LABEL_CREATED', 'DELIVERED', 'APPROVED'].includes(updateData.status || body.status)) {
         await tx.payment.updateMany({
           where: { shipmentId: shipment.id },
           data: { status: 'PAID' },
@@ -315,7 +397,7 @@ export async function PATCH(request: NextRequest) {
         await tx.trackingEvent.create({
           data: {
             shipmentId: shipment.id,
-            status: (body.status as any) || shipment.status,
+            status: updateData.status || shipment.status,
             description: desc,
             city: body.currentLocation || shipment.senderCity,
             country: shipment.senderCountry || 'US',

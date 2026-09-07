@@ -81,7 +81,7 @@ export default function MyShipmentsPage() {
               senderCity: dbItem.senderCity || '',
               recipientCity: dbItem.recipientCity || '',
               service: dbItem.serviceType || 'Standard',
-              status: dbItem.status || 'PENDING_PAYMENT',
+              status: dbItem.displayStatus || (dbItem.status === 'PROCESSING' ? 'PAYMENT_SUBMITTED' : (dbItem.status || 'PENDING_PAYMENT')),
               created: dbItem.createdAt ? new Date(dbItem.createdAt).toLocaleDateString() : '',
               estimated: '3-5 Days',
               weight: `${Number(dbItem.weight) || 3.5} kg`,

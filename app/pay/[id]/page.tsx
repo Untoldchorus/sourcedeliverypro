@@ -136,7 +136,10 @@ export default function PayPage() {
           id: shipment.id,
           trackingNumber: shipment.trackingNumber,
           status: 'PAYMENT_SUBMITTED',
-          remark: `Payment of verified transaction ${txId.trim()} via ${selectedMethod.name} submitted for admin approval.`,
+          paymentTxId: txId.trim(),
+          paymentMethod: selectedMethod.name,
+          paymentPayer: payerName.trim() || shipment.senderName || 'Customer',
+          remark: `Payment of verified transaction ${txId.trim()} via ${selectedMethod.name} submitted for admin confirmation.`,
         }),
       })
     } catch (err) {

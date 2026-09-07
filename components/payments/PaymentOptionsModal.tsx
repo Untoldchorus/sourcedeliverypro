@@ -82,23 +82,43 @@ export function PaymentOptionsModal({
     setTimeout(() => setCopiedLink(false), 2000)
   }
 
-  const handleSubmitPayNow = (e: React.FormEvent) => {
+  const handleSubmitPayNow = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!transactionId.trim()) return
 
     setSubmitting(true)
-    setTimeout(() => {
-      saveLocalShipment({
-        ...shipment,
-        status: 'PAYMENT_SUBMITTED',
-        paymentMethod: selectedMethod.name,
-        paymentTxId: transactionId.trim(),
-        paymentPayer: payerName.trim() || shipment.senderName || 'Customer',
-        paymentSubmittedAt: new Date().toISOString(),
+
+    const updatedShipment = {
+      ...shipment,
+      status: 'PAYMENT_SUBMITTED',
+      paymentMethod: selectedMethod.name,
+      paymentTxId: transactionId.trim(),
+      paymentPayer: payerName.trim() || shipment.senderName || 'Customer',
+      paymentSubmittedAt: new Date().toISOString(),
+    }
+
+    saveLocalShipment(updatedShipment)
+
+    try {
+      await fetch('/api/shipments', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: shipment.id,
+          trackingNumber: shipment.trackingNumber,
+          status: 'PAYMENT_SUBMITTED',
+          paymentTxId: transactionId.trim(),
+          paymentMethod: selectedMethod.name,
+          paymentPayer: payerName.trim() || shipment.senderName || 'Customer',
+          remark: `Payment of ${formatCurrency(shipment.amount)} submitted via ${selectedMethod.name} (Txn Ref: ${transactionId.trim()}) awaiting verification.`,
+        }),
       })
-      setSubmitting(false)
-      setSubmitted(true)
-    }, 600)
+    } catch (err) {
+      console.warn('DB patch failed in PaymentOptionsModal:', err)
+    }
+
+    setSubmitting(false)
+    setSubmitted(true)
   }
 
   const handleSelectPayLater = () => {

@@ -326,6 +326,22 @@ export async function getUnifiedShipments(): Promise<any[]> {
     apiList.forEach((dbItem: any) => {
       const key = dbItem.trackingNumber || dbItem.id
       if (key) {
+        const hasPaymentTx = Boolean(
+          (dbItem.payment?.paymentReference && !dbItem.payment.paymentReference.startsWith('PAY-')) ||
+          dbItem.payment?.metadata?.paymentTxId ||
+          dbItem.paymentTxId
+        )
+
+        let status = dbItem.status || 'PENDING_PAYMENT'
+        if (dbItem.displayStatus === 'PAYMENT_SUBMITTED' || status === 'PROCESSING' || (status === 'PENDING_PAYMENT' && hasPaymentTx)) {
+          status = 'PAYMENT_SUBMITTED'
+        }
+
+        const paymentTxId = dbItem.paymentTxId || dbItem.payment?.metadata?.paymentTxId ||
+          (dbItem.payment?.paymentReference && !dbItem.payment.paymentReference.startsWith('PAY-') ? dbItem.payment.paymentReference : undefined)
+        const paymentMethod = dbItem.paymentMethod || dbItem.payment?.metadata?.paymentMethod || dbItem.payment?.provider || 'Manual Payment'
+        const paymentPayer = dbItem.paymentPayer || dbItem.payment?.metadata?.paymentPayer || dbItem.senderName || 'Customer'
+
         map.set(key, {
           id: dbItem.id,
           trackingNumber: dbItem.trackingNumber || 'Pending Confirmation',
@@ -342,7 +358,11 @@ export async function getUnifiedShipments(): Promise<any[]> {
           destination: dbItem.recipientCity ? `${dbItem.recipientCity}, ${dbItem.recipientCountry || ''}` : '',
           service: dbItem.serviceType || 'Standard',
           serviceType: dbItem.serviceType || 'Standard',
-          status: dbItem.status || 'PENDING_PAYMENT',
+          status,
+          rawStatus: dbItem.status,
+          paymentTxId,
+          paymentMethod,
+          paymentPayer,
           created: dbItem.createdAt ? new Date(dbItem.createdAt).toLocaleDateString() : '',
           createdAt: dbItem.createdAt,
           estimated: '3-5 Days',
