@@ -57,16 +57,50 @@ export default function PayPage() {
   useEffect(() => {
     if (!shipmentId) return
 
-    const list = getLocalShipments()
-    const found = list.find((s: any) => s.id === shipmentId || s.trackingNumber === shipmentId)
-    if (found) {
-      setShipment(found as ShipmentItem)
-      if (found.senderName) setPayerName(found.senderName)
-      if (found.status === 'PAYMENT_SUBMITTED') setSubmitted(true)
-    } else {
-      setShipment(null)
+    let isMounted = true
+
+    async function loadShipment() {
+      const list = getLocalShipments()
+      let found: any = list.find((s: any) => s.id === shipmentId || s.trackingNumber === shipmentId)
+
+      if (!found) {
+        try {
+          const res = await fetch(`/api/tracking/${encodeURIComponent(shipmentId)}`)
+          const json = await res.json()
+          if (json.success && json.data) {
+            found = {
+              id: json.data.id || shipmentId,
+              trackingNumber: json.data.trackingNumber,
+              status: json.data.status,
+              weight: json.data.weight,
+              amount: json.data.totalAmount,
+              senderName: json.data.senderName,
+              recipientName: json.data.recipientName,
+              origin: json.data.originCity,
+              destination: json.data.destinationCity,
+              serviceType: json.data.serviceType,
+            }
+          }
+        } catch {}
+      }
+
+      if (isMounted) {
+        if (found) {
+          setShipment(found as ShipmentItem)
+          if (found.senderName) setPayerName(found.senderName)
+          if (found.status === 'PAYMENT_SUBMITTED') setSubmitted(true)
+        } else {
+          setShipment(null)
+        }
+        setLoading(false)
+      }
     }
-    setLoading(false)
+
+    loadShipment()
+
+    return () => {
+      isMounted = false
+    }
   }, [shipmentId])
 
   const selectedMethod = MANUAL_PAYMENT_METHODS.find((m) => m.id === selectedMethodId) || MANUAL_PAYMENT_METHODS[0]
@@ -77,25 +111,41 @@ export default function PayPage() {
     setTimeout(() => setCopiedField(null), 2000)
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!txId.trim() || !shipment) return
 
     setSubmitting(true)
-    setTimeout(() => {
-      const updatedShipment = {
-        ...shipment,
-        status: 'PAYMENT_SUBMITTED',
-        paymentTxId: txId.trim(),
-        paymentMethod: selectedMethod.name,
-        paymentPayer: payerName.trim() || shipment.senderName || 'Authorized Payer',
-        paymentSubmittedAt: new Date().toISOString(),
-      }
-      saveLocalShipment(updatedShipment)
-      setShipment(updatedShipment)
-      setSubmitted(true)
-      setSubmitting(false)
-    }, 800)
+
+    const updatedShipment = {
+      ...shipment,
+      status: 'PAYMENT_SUBMITTED',
+      paymentTxId: txId.trim(),
+      paymentMethod: selectedMethod.name,
+      paymentPayer: payerName.trim() || shipment.senderName || 'Authorized Payer',
+      paymentSubmittedAt: new Date().toISOString(),
+    }
+
+    saveLocalShipment(updatedShipment)
+
+    try {
+      await fetch('/api/shipments', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: shipment.id,
+          trackingNumber: shipment.trackingNumber,
+          status: 'PAYMENT_SUBMITTED',
+          remark: `Payment of verified transaction ${txId.trim()} via ${selectedMethod.name} submitted for admin approval.`,
+        }),
+      })
+    } catch (err) {
+      console.warn('DB patch failed for payment submission:', err)
+    }
+
+    setShipment(updatedShipment)
+    setSubmitted(true)
+    setSubmitting(false)
   }
 
   if (loading) {

@@ -7,6 +7,7 @@ import {
   AlertCircle, RefreshCw, X, CheckCircle2, Plus, Save, Trash2, Shield
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { getDeletedUsers, addDeletedUser } from '@/lib/payments/manualOptions'
 
 interface AdminUser {
   id: string
@@ -31,28 +32,6 @@ const DEFAULT_USERS: AdminUser[] = [
     lastLogin: 'Today',
     company: 'SourceDeliveryPro Command Hub',
     address: '1200 Logistics Blvd, Atlanta, GA 30301, USA',
-  },
-  {
-    id: 'usr-drv-1',
-    name: 'Marcus Vance',
-    email: 'driver@sourcedeliverypro.com',
-    phone: '+1 555-0182',
-    role: 'DRIVER',
-    status: 'ACTIVE',
-    lastLogin: 'Yesterday',
-    company: 'SourceDeliveryPro Fleet Dispatch',
-    address: 'Dispatch Terminal 4, New York, US',
-  },
-  {
-    id: 'usr-mgr-1',
-    name: 'Hans Weber',
-    email: 'manager@sourcedeliverypro.com',
-    phone: '+49 69 987654',
-    role: 'OPERATIONS_MANAGER',
-    status: 'ACTIVE',
-    lastLogin: 'Sep 06, 2026',
-    company: 'Frankfurt Hub Command',
-    address: 'Zeil 106, Frankfurt, DE',
   },
 ]
 
@@ -93,6 +72,8 @@ export default function UserDirectoryPage() {
   const loadUsers = async () => {
     setLoading(true)
     try {
+      const deleted = getDeletedUsers()
+
       // 1. Fetch real users from DB
       const res = await fetch('/api/admin/users')
       const json = await res.json()
@@ -104,13 +85,23 @@ export default function UserDirectoryPage() {
 
       const mergedMap = new Map<string, AdminUser>()
 
-      // Defaults
-      DEFAULT_USERS.forEach((u) => mergedMap.set(u.email.toLowerCase(), u))
+      // Defaults (only if not deleted)
+      DEFAULT_USERS.forEach((u) => {
+        const uEmail = u.email.toLowerCase()
+        const uId = u.id.toLowerCase()
+        if (!deleted.includes(uEmail) && !deleted.includes(uId)) {
+          mergedMap.set(uEmail, u)
+        }
+      })
 
       // Real users from database
       dbUsers.forEach((u: any) => {
         const key = (u.email || '').toLowerCase()
-        if (key) {
+        const uId = (u.id || '').toLowerCase()
+        if (key && !deleted.includes(key) && !deleted.includes(uId)) {
+          // Exclude legacy mock user remnants
+          if (key === 'driver@sourcedeliverypro.com' || key === 'manager@sourcedeliverypro.com') return
+
           mergedMap.set(key, {
             id: u.id,
             name: u.name || key.split('@')[0],
@@ -127,8 +118,12 @@ export default function UserDirectoryPage() {
       // Overlay local updates
       localUsers.forEach((u) => {
         if (u.email) {
-          const existing = mergedMap.get(u.email.toLowerCase()) || {}
-          mergedMap.set(u.email.toLowerCase(), { ...existing, ...u })
+          const key = u.email.toLowerCase()
+          const uId = (u.id || '').toLowerCase()
+          if (!deleted.includes(key) && !deleted.includes(uId)) {
+            const existing = mergedMap.get(key) || {}
+            mergedMap.set(key, { ...existing, ...u })
+          }
         }
       })
 
@@ -311,6 +306,9 @@ export default function UserDirectoryPage() {
     setDeleteLoading(true)
 
     try {
+      if (userToDelete.email) addDeletedUser(userToDelete.email)
+      if (userToDelete.id) addDeletedUser(userToDelete.id)
+
       // Call API to remove from database
       await fetch('/api/admin/users', {
         method: 'DELETE',

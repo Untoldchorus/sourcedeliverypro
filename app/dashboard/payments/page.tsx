@@ -6,6 +6,7 @@ import { CreditCard, DollarSign, ShieldCheck, CheckCircle2, RefreshCw, Plus } fr
 import { Button } from '@/components/ui/button'
 import { formatCurrency } from '@/lib/utils'
 import { useSession } from 'next-auth/react'
+import { getUnifiedShipments } from '@/lib/payments/manualOptions'
 
 export default function PaymentsPage() {
   const { data: session } = useSession()
@@ -15,39 +16,48 @@ export default function PaymentsPage() {
   const userName = session?.user?.name?.toLowerCase() || ''
 
   React.useEffect(() => {
-    try {
-      const savedRaw = localStorage.getItem('sourcedeliverypro_admin_shipments') || localStorage.getItem('swiftship_admin_shipments')
-      if (savedRaw) {
-        const parsed = JSON.parse(savedRaw)
-        const list = Array.isArray(parsed) ? parsed : Object.values(parsed)
-        
-        // Filter strictly by logged-in user
-        const userList = list.filter((s: any) => {
-          const sEmail = (s.senderEmail || '').toLowerCase()
+    let isMounted = true
+
+    async function loadPayments() {
+      try {
+        const unified = await getUnifiedShipments()
+
+        // Filter strictly by logged-in user or session
+        const userList = unified.filter((s: any) => {
+          const sEmail = (s.senderEmail || s.userEmail || '').toLowerCase()
+          const rEmail = (s.recipientEmail || '').toLowerCase()
           const sName = (s.senderName || s.sender || '').toLowerCase()
           const sUser = (s.userId || '').toLowerCase()
 
-          if (userEmail && sEmail === userEmail) return true
-          if (userName && sName === userName) return true
+          if (userEmail && (sEmail === userEmail || rEmail === userEmail)) return true
+          if (userName && sName.includes(userName)) return true
           if (session?.user?.id && sUser === session.user.id.toLowerCase()) return true
+          if (s.isLocal) return true
           return false
         })
 
         const mapped = userList.map((item: any, idx: number) => ({
           id: item.id || `local-pay-${idx}`,
-          ref: item.transactionId || item.trackingNumber || `PAY-2026-${1000 + idx}`,
+          ref: item.transactionId || item.paymentTxId || item.trackingNumber || `PAY-2026-${1000 + idx}`,
           date: item.created || 'Recent',
           method: item.paymentChoice || item.serviceType || item.paymentMethod || 'Manual Transfer',
           amount: Number(item.amount) || Number(item.totalAmount) || (Number(item.weight) || 2) * 25,
-          status: item.status === 'LABEL_CREATED' || item.status === 'DELIVERED' ? 'PAID' : (item.status || 'PENDING'),
+          status: item.status === 'LABEL_CREATED' || item.status === 'DELIVERED' ? 'PAID' : (item.status === 'PAYMENT_SUBMITTED' ? 'AWAITING CONFIRMATION' : item.status || 'PENDING'),
         }))
-        setPayments(mapped)
-      } else {
-        setPayments([])
+
+        if (isMounted) {
+          setPayments(mapped)
+        }
+      } catch (e) {
+        console.error('Failed to load payments:', e)
+        if (isMounted) setPayments([])
       }
-    } catch (e) {
-      console.error(e)
-      setPayments([])
+    }
+
+    loadPayments()
+
+    return () => {
+      isMounted = false
     }
   }, [userEmail, userName, session?.user?.id])
 

@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { formatCurrency } from '@/lib/utils'
 
 import { useSession } from 'next-auth/react'
+import { getUnifiedShipments } from '@/lib/payments/manualOptions'
 
 interface Invoice {
   id: string
@@ -27,21 +28,23 @@ export default function InvoicesPage() {
   const userName = session?.user?.name?.toLowerCase() || ''
 
   React.useEffect(() => {
-    try {
-      const savedRaw = localStorage.getItem('sourcedeliverypro_admin_shipments') || localStorage.getItem('swiftship_admin_shipments')
-      if (savedRaw) {
-        const parsed = JSON.parse(savedRaw)
-        const list = Array.isArray(parsed) ? parsed : Object.values(parsed)
-        
-        // Filter strictly by logged-in user
-        const userList = list.filter((s: any) => {
-          const sEmail = (s.senderEmail || '').toLowerCase()
+    let isMounted = true
+
+    async function loadInvoices() {
+      try {
+        const unified = await getUnifiedShipments()
+
+        // Filter strictly by logged-in user or session
+        const userList = unified.filter((s: any) => {
+          const sEmail = (s.senderEmail || s.userEmail || '').toLowerCase()
+          const rEmail = (s.recipientEmail || '').toLowerCase()
           const sName = (s.senderName || s.sender || '').toLowerCase()
           const sUser = (s.userId || '').toLowerCase()
 
-          if (userEmail && sEmail === userEmail) return true
-          if (userName && sName === userName) return true
+          if (userEmail && (sEmail === userEmail || rEmail === userEmail)) return true
+          if (userName && sName.includes(userName)) return true
           if (session?.user?.id && sUser === session.user.id.toLowerCase()) return true
+          if (s.isLocal) return true
           return false
         })
 
@@ -54,13 +57,20 @@ export default function InvoicesPage() {
           status: s.status === 'LABEL_CREATED' || s.status === 'DELIVERED' ? 'PAID' : 'UNPAID',
           paidAt: s.receipt?.createdDate || undefined,
         }))
-        setInvoices(mapped)
-      } else {
-        setInvoices([])
+
+        if (isMounted) {
+          setInvoices(mapped)
+        }
+      } catch (e) {
+        console.error('Failed to load invoices:', e)
+        if (isMounted) setInvoices([])
       }
-    } catch (e) {
-      console.error(e)
-      setInvoices([])
+    }
+
+    loadInvoices()
+
+    return () => {
+      isMounted = false
     }
   }, [userEmail, userName, session?.user?.id])
 
@@ -135,8 +145,8 @@ export default function InvoicesPage() {
                     </Button>
 
                     {inv.status === 'UNPAID' && (
-                      <Button asChild size="sm" className="bg-[#6B2737] hover:bg-[#E85A24] text-white font-bold text-xs">
-                        <Link href="/checkout">Pay Invoice</Link>
+                      <Button asChild size="sm" className="bg-[#6B2737] hover:bg-[#521b28] text-white font-bold text-xs">
+                        <Link href={`/pay/${inv.id}`}>Pay Invoice</Link>
                       </Button>
                     )}
                   </td>

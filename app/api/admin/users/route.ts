@@ -37,10 +37,25 @@ export async function DELETE(request: NextRequest) {
     }
 
     try {
-      if (id) {
-        await db.user.delete({ where: { id } })
-      } else if (email) {
-        await db.user.delete({ where: { email: email.toLowerCase() } })
+      const user = await db.user.findFirst({
+        where: id ? { id } : { email: email.toLowerCase() },
+      })
+
+      if (user) {
+        await db.$transaction(async (tx) => {
+          await tx.account.deleteMany({ where: { userId: user.id } }).catch(() => null)
+          await tx.session.deleteMany({ where: { userId: user.id } }).catch(() => null)
+          await tx.loginHistory.deleteMany({ where: { userId: user.id } }).catch(() => null)
+          await tx.notification.deleteMany({ where: { userId: user.id } }).catch(() => null)
+          await tx.notificationPreference.deleteMany({ where: { userId: user.id } }).catch(() => null)
+          await tx.userPermission.deleteMany({ where: { userId: user.id } }).catch(() => null)
+          await tx.supportMessage.deleteMany({ where: { senderId: user.id } }).catch(() => null)
+          await tx.customer.deleteMany({ where: { userId: user.id } }).catch(() => null)
+          await tx.shipment.updateMany({ where: { createdById: user.id }, data: { createdById: null } }).catch(() => null)
+          await tx.trackingEvent.updateMany({ where: { createdById: user.id }, data: { createdById: null } }).catch(() => null)
+          await tx.auditLog.deleteMany({ where: { OR: [{ userId: user.id }, { targetId: user.id }] } }).catch(() => null)
+          await tx.user.delete({ where: { id: user.id } })
+        })
       }
     } catch (dbErr) {
       console.warn('DB delete warning (continuing fallback):', dbErr)

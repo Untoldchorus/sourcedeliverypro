@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, Suspense } from 'react'
+import Link from 'next/link'
 import { useSearchParams, useRouter } from 'next/navigation'
 import {
   CreditCard, ShieldCheck, CheckCircle2, AlertCircle,

@@ -279,3 +279,136 @@ export function deleteLocalReceipt(idOrNumber: string) {
     console.error('Failed to delete receipt from localStorage', err)
   }
 }
+
+export function getDeletedUsers(): string[] {
+  if (typeof window === 'undefined') return []
+  try {
+    const raw = localStorage.getItem('sourcedeliverypro_deleted_users')
+    return raw ? JSON.parse(raw) : []
+  } catch {
+    return []
+  }
+}
+
+export function addDeletedUser(idOrEmail: string) {
+  if (typeof window === 'undefined' || !idOrEmail) return
+  try {
+    const deleted = getDeletedUsers()
+    const target = idOrEmail.toLowerCase()
+    if (!deleted.includes(target)) {
+      deleted.push(target)
+      localStorage.setItem('sourcedeliverypro_deleted_users', JSON.stringify(deleted))
+    }
+  } catch (err) {
+    console.error('Failed to record deleted user', err)
+  }
+}
+
+export async function getUnifiedShipments(): Promise<any[]> {
+  if (typeof window === 'undefined') return []
+  try {
+    const localList = getLocalShipments()
+    const deleted = getDeletedShipments()
+
+    // 1. Fetch from database API
+    let apiList: any[] = []
+    try {
+      const res = await fetch('/api/shipments')
+      const json = await res.json()
+      if (json.success && Array.isArray(json.data)) {
+        apiList = json.data
+      }
+    } catch {}
+
+    const map = new Map<string, any>()
+
+    // Put DB items first
+    apiList.forEach((dbItem: any) => {
+      const key = dbItem.trackingNumber || dbItem.id
+      if (key) {
+        map.set(key, {
+          id: dbItem.id,
+          trackingNumber: dbItem.trackingNumber || 'Pending Confirmation',
+          sender: dbItem.senderName || '',
+          senderName: dbItem.senderName || '',
+          senderEmail: dbItem.senderEmail || '',
+          senderCity: dbItem.senderCity || '',
+          senderCountry: dbItem.senderCountry || '',
+          recipient: dbItem.recipientName || '',
+          recipientName: dbItem.recipientName || '',
+          recipientEmail: dbItem.recipientEmail || '',
+          recipientCity: dbItem.recipientCity || '',
+          recipientCountry: dbItem.recipientCountry || '',
+          destination: dbItem.recipientCity ? `${dbItem.recipientCity}, ${dbItem.recipientCountry || ''}` : '',
+          service: dbItem.serviceType || 'Standard',
+          serviceType: dbItem.serviceType || 'Standard',
+          status: dbItem.status || 'PENDING_PAYMENT',
+          created: dbItem.createdAt ? new Date(dbItem.createdAt).toLocaleDateString() : '',
+          createdAt: dbItem.createdAt,
+          estimated: '3-5 Days',
+          estimatedDelivery: '3-5 Days',
+          weight: `${Number(dbItem.weight) || 3.5} kg`,
+          amount: Number(dbItem.totalAmount) || 0,
+          totalAmount: Number(dbItem.totalAmount) || 0,
+          userId: dbItem.customerId || '',
+          userEmail: dbItem.senderEmail || '',
+          isLocal: false,
+        })
+      }
+    })
+
+    // Overlay local items
+    localList.forEach((localItem: any) => {
+      const key = localItem.trackingNumber || localItem.id
+      if (key) {
+        const existing = map.get(key) || {}
+        map.set(key, {
+          ...existing,
+          ...localItem,
+          id: localItem.id || key,
+          trackingNumber: localItem.trackingNumber || existing.trackingNumber || 'Pending Confirmation',
+          sender: localItem.sender || localItem.senderName || existing.sender || '',
+          senderName: localItem.senderName || existing.senderName || '',
+          senderEmail: localItem.senderEmail || existing.senderEmail || '',
+          senderCity: localItem.senderCity || existing.senderCity || '',
+          recipient: localItem.recipient || localItem.recipientName || existing.recipient || '',
+          recipientName: localItem.recipientName || existing.recipientName || '',
+          recipientEmail: localItem.recipientEmail || existing.recipientEmail || '',
+          recipientCity: localItem.recipientCity || existing.recipientCity || '',
+          destination: (localItem.recipientCity || existing.recipientCity) ? `${localItem.recipientCity || existing.recipientCity}` : '',
+          service: localItem.serviceType || localItem.service || existing.service || 'Standard',
+          serviceType: localItem.serviceType || localItem.service || existing.serviceType || 'Standard',
+          status: localItem.status || existing.status || 'PENDING_PAYMENT',
+          created: localItem.created || existing.created || '',
+          createdAt: localItem.createdAt || existing.createdAt,
+          estimated: localItem.estimated || localItem.estimatedDelivery || existing.estimated || '3-5 Days',
+          estimatedDelivery: localItem.estimated || localItem.estimatedDelivery || existing.estimatedDelivery || '3-5 Days',
+          weight: localItem.weight ? (localItem.weight.toString().includes('kg') ? localItem.weight : `${localItem.weight} kg`) : existing.weight || '3.5 kg',
+          amount: (localItem.totalAmount || localItem.amount) ? parseFloat(localItem.totalAmount || localItem.amount) : existing.amount || 0,
+          totalAmount: (localItem.totalAmount || localItem.amount) ? parseFloat(localItem.totalAmount || localItem.amount) : existing.totalAmount || 0,
+          userId: localItem.userId || existing.userId || '',
+          userEmail: localItem.userEmail || localItem.senderEmail || existing.userEmail || '',
+          isLocal: true,
+        })
+      }
+    })
+
+    const combined = Array.from(map.values())
+
+    // Filter out deleted items and seed demo tracking numbers
+    const active = combined.filter((s: any) => {
+      const sId = (s.id || '').toLowerCase()
+      const sTrk = (s.trackingNumber || '').toLowerCase()
+      if (deleted.includes(sId) || deleted.includes(sTrk)) return false
+      // Never show seed shipments
+      if (sTrk === 'sdp8f4k92lm381' || sTrk === 'sdp993c104kl22' || sTrk === 'sdp77b219kp440') return false
+      return true
+    })
+
+    return active
+  } catch (err) {
+    console.error('Failed to get unified shipments:', err)
+    return getLocalShipments()
+  }
+}
+

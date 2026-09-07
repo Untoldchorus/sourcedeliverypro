@@ -51,77 +51,105 @@ export default function AdminPaymentsPage() {
   const handleApprove = async (pay: any) => {
     setProcessingId(pay.id)
 
-    setTimeout(() => {
-      const amount = Number(pay.amount) || (Number(pay.weight) || 3.5) * 25 + 40
-      const subtotal = Math.round((amount / 1.08) * 100) / 100
-      const tax = Math.round((amount - subtotal) * 100) / 100
+    const amount = Number(pay.amount) || (Number(pay.weight) || 3.5) * 25 + 40
+    const subtotal = Math.round((amount / 1.08) * 100) / 100
+    const tax = Math.round((amount - subtotal) * 100) / 100
 
-      // Keep or generate SDP tracking number
-      const tracking =
-        pay.trackingNumber && pay.trackingNumber.startsWith('SDP') && !pay.trackingNumber.includes('Pending')
-          ? pay.trackingNumber
-          : 'SDP' + Math.random().toString(36).substring(2, 13).toUpperCase()
+    // Keep or generate SDP tracking number
+    const tracking =
+      pay.trackingNumber && pay.trackingNumber.startsWith('SDP') && !pay.trackingNumber.includes('Pending')
+        ? pay.trackingNumber
+        : 'SDP' + Math.random().toString(36).substring(2, 13).toUpperCase()
 
-      const receiptNumber = 'RCPT-2026-' + Math.floor(10000 + Math.random() * 90000)
+    const receiptNumber = 'RCPT-2026-' + Math.floor(10000 + Math.random() * 90000)
 
-      const generatedReceipt = {
-        id: 'rcpt-' + Date.now(),
-        receiptNumber,
-        version: 1,
-        customerName: pay.senderName || pay.customerName || 'Customer',
-        customerEmail: pay.senderEmail || pay.customerEmail || 'customer@sourcedeliverypro.com',
-        trackingNumber: tracking,
-        paymentRef: pay.paymentTxId || pay.transactionId || ('TXN-' + Date.now()),
-        paymentMethod: pay.paymentMethod || 'Manual Payment (Verified)',
-        subtotal,
-        tax,
-        total: amount,
-        status: 'PAID',
-        createdDate: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
-        origin: pay.origin || pay.senderCity || 'Origin Hub',
-        destination: pay.destination || pay.recipientCity || 'Destination Hub',
-        serviceType: pay.serviceType || 'Express Courier',
-      }
+    const generatedReceipt = {
+      id: 'rcpt-' + Date.now(),
+      receiptNumber,
+      version: 1,
+      customerName: pay.senderName || pay.customerName || 'Customer',
+      customerEmail: pay.senderEmail || pay.customerEmail || 'customer@sourcedeliverypro.com',
+      trackingNumber: tracking,
+      paymentRef: pay.paymentTxId || pay.transactionId || ('TXN-' + Date.now()),
+      paymentMethod: pay.paymentMethod || 'Manual Payment (Verified)',
+      subtotal,
+      tax,
+      total: amount,
+      status: 'PAID',
+      createdDate: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
+      origin: pay.origin || pay.senderCity || 'Origin Hub',
+      destination: pay.destination || pay.recipientCity || 'Destination Hub',
+      serviceType: pay.serviceType || 'Express Courier',
+    }
 
-      // 1. Save receipt to local receipts
-      saveLocalReceipt(generatedReceipt)
+    // 1. Save receipt to local receipts
+    saveLocalReceipt(generatedReceipt)
 
-      // 2. Update shipment
-      const updatedShipment = {
-        ...pay,
-        status: 'LABEL_CREATED',
-        trackingNumber: tracking,
-        receiptGenerated: true,
-        receiptNumber,
-        receipt: generatedReceipt,
-      }
-      saveLocalShipment(updatedShipment)
+    // 2. Update shipment in local cache
+    const updatedShipment = {
+      ...pay,
+      status: 'LABEL_CREATED',
+      trackingNumber: tracking,
+      receiptGenerated: true,
+      receiptNumber,
+      receipt: generatedReceipt,
+    }
+    saveLocalShipment(updatedShipment)
 
-      // Reload local state
-      loadData()
-      setProcessingId(null)
+    // 3. Sync approval directly to database
+    try {
+      await fetch('/api/shipments', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: pay.id,
+          trackingNumber: tracking,
+          status: 'LABEL_CREATED',
+          remark: `Payment verified & approved by Courier Operations. Shipping label issued. Tracking: ${tracking}`,
+        }),
+      })
+    } catch (err) {
+      console.warn('DB patch failed for approval:', err)
+    }
 
-      // Show receipt modal automatically upon approval
-      setViewingReceipt(generatedReceipt)
-    }, 800)
+    // Reload local state
+    loadData()
+    setProcessingId(null)
+
+    // Show receipt modal automatically upon approval
+    setViewingReceipt(generatedReceipt)
   }
 
   const handleConfirmReject = async () => {
     if (!rejectingPayment) return
     setProcessingId(rejectingPayment.id)
 
-    setTimeout(() => {
-      const updated = {
-        ...rejectingPayment,
-        status: 'PAYMENT_REJECTED',
-        rejectionReason,
-      }
-      saveLocalShipment(updated)
-      loadData()
-      setProcessingId(null)
-      setRejectingPayment(null)
-      setRejectionReason('')
-    }, 600)
+    const updated = {
+      ...rejectingPayment,
+      status: 'PAYMENT_REJECTED',
+      rejectionReason,
+    }
+    saveLocalShipment(updated)
+
+    try {
+      await fetch('/api/shipments', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: rejectingPayment.id,
+          trackingNumber: rejectingPayment.trackingNumber,
+          status: 'PAYMENT_REJECTED',
+          remark: `Payment rejected by Courier Operations: ${rejectionReason || 'Transaction verification unsuccessful.'}`,
+        }),
+      })
+    } catch (err) {
+      console.warn('DB patch failed for rejection:', err)
+    }
+
+    loadData()
+    setProcessingId(null)
+    setRejectingPayment(null)
+    setRejectionReason('')
   }
 
   const handleCopyLink = (shipmentId: string) => {

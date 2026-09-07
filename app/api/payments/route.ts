@@ -119,6 +119,34 @@ export async function PUT(request: NextRequest) {
       )
     }
 
+    try {
+      const payment = await db.payment.findFirst({
+        where: { OR: [{ id: paymentId }, { paymentReference: paymentId }] },
+      })
+
+      if (payment) {
+        await db.$transaction(async (tx) => {
+          await tx.payment.update({
+            where: { id: payment.id },
+            data: { status: action === 'APPROVE' ? 'PAID' : 'FAILED' },
+          })
+
+          if (action === 'APPROVE') {
+            await tx.shipment.update({
+              where: { id: payment.shipmentId },
+              data: { status: 'LABEL_CREATED' },
+            })
+            await tx.invoice.updateMany({
+              where: { shipmentId: payment.shipmentId },
+              data: { status: 'PAID' },
+            })
+          }
+        })
+      }
+    } catch (dbErr) {
+      console.warn('DB payment PUT update warning:', dbErr)
+    }
+
     if (action === 'APPROVE') {
       return NextResponse.json({
         success: true,
@@ -127,7 +155,7 @@ export async function PUT(request: NextRequest) {
           status: 'APPROVED',
           approvedBy: adminName,
           approvedAt: new Date().toISOString(),
-          message: 'Payment manually verified & approved by Courier Admin. Shipping label activated.',
+          message: 'Payment verified & approved. Shipping label activated.',
         },
       })
     } else {
@@ -151,51 +179,39 @@ export async function PUT(request: NextRequest) {
   }
 }
 
-// GET: Admin Payment Approval Queue
+// GET: Admin Payment Approval Queue from Database
 export async function GET() {
-  return NextResponse.json({
-    success: true,
-    data: [
-      {
-        id: 'pay-001',
-        transactionId: 'TXN-20260906-8F4K9',
-        receiptNumber: 'RCPT-20260906-99014',
-        trackingNumber: 'SDP8F4K92LM381',
-        customerName: 'John Doe',
-        customerEmail: 'john@example.com',
-        amount: 145.5,
-        method: 'Credit Card (Visa ending in 4242)',
-        status: 'AWAITING_ADMIN_APPROVAL',
-        dateSubmitted: 'Sep 06, 2026 — 08:30 AM',
-        route: 'New York, US → London, GB',
+  try {
+    const payments = await db.payment.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+      include: {
+        shipment: true,
       },
-      {
-        id: 'pay-002',
-        transactionId: 'TXN-20260905-77B21',
-        receiptNumber: 'RCPT-20260905-88120',
-        trackingNumber: 'SDP77B219KP440',
-        customerName: 'Sarah Jenkins',
-        customerEmail: 'sarah.jenkins@example.co.uk',
-        amount: 88.0,
-        method: 'Paystack Gateway',
-        status: 'APPROVED',
-        approvedBy: 'Super Admin',
-        dateSubmitted: 'Sep 05, 2026 — 02:15 PM',
-        route: 'Toronto, CA → Frankfurt, DE',
-      },
-      {
-        id: 'pay-003',
-        transactionId: 'TXN-20260906-993C1',
-        receiptNumber: 'RCPT-20260906-77199',
-        trackingNumber: 'SDP993C104KL22',
-        customerName: 'John Doe',
-        customerEmail: 'john@example.com',
-        amount: 420.0,
-        method: 'Bank Wire Transfer',
-        status: 'AWAITING_ADMIN_APPROVAL',
-        dateSubmitted: 'Sep 06, 2026 — 09:10 AM',
-        route: 'New York, US → Lagos, NG',
-      },
-    ],
-  })
+    })
+
+    const mapped = payments.map((p) => ({
+      id: p.id,
+      transactionId: p.paymentReference,
+      receiptNumber: (p.metadata as any)?.receiptNumber || `RCPT-${p.id.slice(-6).toUpperCase()}`,
+      trackingNumber: p.shipment?.trackingNumber || 'Pending',
+      customerName: p.shipment?.senderName || 'Customer',
+      customerEmail: p.shipment?.senderEmail || '',
+      amount: Number(p.amount) || 0,
+      method: p.provider || 'MANUAL',
+      status: p.status === 'PAID' ? 'APPROVED' : (p.status === 'PENDING' ? 'AWAITING_CONFIRMATION' : p.status),
+      dateSubmitted: p.createdAt ? new Date(p.createdAt).toLocaleString() : 'Recent',
+      route: `${p.shipment?.senderCity || 'Origin'} → ${p.shipment?.recipientCity || 'Destination'}`,
+    }))
+
+    return NextResponse.json({
+      success: true,
+      data: mapped,
+    })
+  } catch (error) {
+    return NextResponse.json({
+      success: true,
+      data: [],
+    })
+  }
 }

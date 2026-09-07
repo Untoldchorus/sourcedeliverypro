@@ -175,11 +175,27 @@ export default function AdminShipmentsPage() {
     loadShipments()
   }, [])
 
-  const handleStatusChange = (id: string, newStatus: string) => {
+  const handleStatusChange = async (id: string, newStatus: string) => {
     const target = shipments.find((s) => s.id === id || s.trackingNumber === id)
     if (target) {
       const updatedItem = { ...target, status: newStatus }
       saveLocalShipment(updatedItem)
+
+      // Sync to database
+      try {
+        await fetch('/api/shipments', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: target.id,
+            trackingNumber: target.trackingNumber,
+            status: newStatus,
+            remark: `Status changed to ${newStatus.replace(/_/g, ' ')} by Courier Admin.`,
+          }),
+        })
+      } catch (err) {
+        console.warn('DB patch failed for status change:', err)
+      }
     }
 
     const updated = shipments.map((s) =>

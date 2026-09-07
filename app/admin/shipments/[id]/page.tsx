@@ -157,10 +157,31 @@ export default function AdminEditEverythingShipmentPage() {
   }, [shipmentId])
 
   // Save all changes
-  const handleSave = (e?: React.FormEvent) => {
+  const handleSave = async (e?: React.FormEvent) => {
     if (e) e.preventDefault()
     try {
       saveLocalShipment(formData)
+
+      // Sync to database
+      await fetch('/api/shipments', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: formData.id,
+          trackingNumber: formData.trackingNumber,
+          status: formData.status,
+          serviceType: formData.serviceType,
+          weight: formData.weight,
+          amount: formData.totalAmount,
+          senderName: formData.senderName,
+          senderCity: formData.senderCity,
+          recipientName: formData.recipientName,
+          recipientCity: formData.recipientCity,
+          currentLocation: formData.currentLocation,
+          remark: formData.remarks?.[0]?.text || `Shipment details updated by Operations Admin.`,
+        }),
+      }).catch((err) => console.warn('DB patch warning:', err))
+
       setSavedSuccess(true)
       setTimeout(() => setSavedSuccess(false), 3500)
     } catch (err) {
@@ -169,7 +190,7 @@ export default function AdminEditEverythingShipmentPage() {
   }
 
   // Add new remark
-  const handleAddRemark = () => {
+  const handleAddRemark = async () => {
     if (!newRemarkText.trim()) return
 
     const now = new Date()
@@ -203,6 +224,23 @@ export default function AdminEditEverythingShipmentPage() {
     setFormData(updated)
     setNewRemarkText('')
     saveLocalShipment(updated)
+
+    // Sync remark to database
+    try {
+      await fetch('/api/shipments', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: formData.id,
+          trackingNumber: formData.trackingNumber,
+          status: formData.status,
+          currentLocation: formData.currentLocation,
+          remark: `[${newRemarkCategory}] ${newRemarkText.trim()}`,
+        }),
+      })
+    } catch (err) {
+      console.warn('DB remark sync warning:', err)
+    }
   }
 
   // Delete a remark

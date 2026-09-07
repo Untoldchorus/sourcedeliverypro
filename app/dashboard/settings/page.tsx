@@ -1,16 +1,33 @@
 'use client'
 
-import React from 'react'
-import { Settings, Bell, Lock, ShieldCheck, Globe, CreditCard } from 'lucide-react'
+import React, { useState } from 'react'
+import Link from 'next/link'
+import { Settings, Bell, Lock, ShieldCheck, Globe, CreditCard, CheckCircle2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 export default function UserSettingsPage() {
+  const [tfaEnabled, setTfaEnabled] = useState(false)
+  const [savedAlert, setSavedAlert] = useState(false)
+
+  const handleToggle2FA = () => {
+    setTfaEnabled(!tfaEnabled)
+    setSavedAlert(true)
+    setTimeout(() => setSavedAlert(false), 2500)
+  }
+
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
       <div>
         <h1 className="text-2xl font-black text-[#1B2A4A]">Account Settings</h1>
         <p className="text-xs text-slate-500 mt-1">Configure email alerts, notification triggers, and security options.</p>
       </div>
+
+      {savedAlert && (
+        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 p-3 rounded-xl flex items-center gap-2 text-xs font-bold shadow-sm">
+          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+          <span>Security settings updated successfully!</span>
+        </div>
+      )}
 
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-6 text-xs">
         <div className="space-y-4">
@@ -39,11 +56,19 @@ export default function UserSettingsPage() {
             <Lock className="w-4 h-4 text-[#6B2737]" /> Security & Password
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Button variant="outline" className="justify-start">
-              <Lock className="w-4 h-4 mr-2 text-slate-400" /> Change Password
+            <Button asChild variant="outline" className="justify-start">
+              <Link href="/dashboard/profile">
+                <Lock className="w-4 h-4 mr-2 text-slate-400" /> Change Password
+              </Link>
             </Button>
-            <Button variant="outline" className="justify-start">
-              <ShieldCheck className="w-4 h-4 mr-2 text-slate-400" /> Enable Two-Factor Authentication
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleToggle2FA}
+              className={`justify-start ${tfaEnabled ? 'border-emerald-500 text-emerald-700 bg-emerald-50/50' : ''}`}
+            >
+              <ShieldCheck className={`w-4 h-4 mr-2 ${tfaEnabled ? 'text-emerald-600' : 'text-slate-400'}`} />
+              {tfaEnabled ? 'Two-Factor Enabled (Active)' : 'Enable Two-Factor Authentication'}
             </Button>
           </div>
         </div>

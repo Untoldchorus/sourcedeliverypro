@@ -9,7 +9,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { formatCurrency } from '@/lib/utils'
-import { getLocalShipments } from '@/lib/payments/manualOptions'
+import { getUnifiedShipments } from '@/lib/payments/manualOptions'
 
 export default function CustomerDashboardPage() {
   const { data: session } = useSession()
@@ -20,39 +20,53 @@ export default function CustomerDashboardPage() {
   const userName = session?.user?.name?.toLowerCase() || ''
 
   useEffect(() => {
-    try {
-      const allLocal = getLocalShipments()
+    let isMounted = true
 
-      // Strictly filter to shipments belonging to this customer
-      const userShipments = allLocal.filter((s: any) => {
-        const sEmail = (s.senderEmail || '').toLowerCase()
-        const sName = (s.senderName || s.sender || '').toLowerCase()
-        const sUser = (s.userId || '').toLowerCase()
+    async function loadData() {
+      try {
+        const unified = await getUnifiedShipments()
 
-        // Match by user's email or sender name
-        if (userEmail && sEmail === userEmail) return true
-        if (userName && sName === userName) return true
-        if (session?.user?.id && sUser === session.user.id.toLowerCase()) return true
-        return false
-      })
+        // Filter to consignments associated with this customer
+        const userShipments = unified.filter((s: any) => {
+          const sEmail = (s.senderEmail || s.userEmail || '').toLowerCase()
+          const rEmail = (s.recipientEmail || '').toLowerCase()
+          const sName = (s.senderName || s.sender || '').toLowerCase()
+          const sUser = (s.userId || '').toLowerCase()
 
-      setShipments(userShipments)
-    } catch {
-      setShipments([])
-    } finally {
-      setLoading(false)
+          if (userEmail && (sEmail === userEmail || rEmail === userEmail)) return true
+          if (userName && sName.includes(userName)) return true
+          if (session?.user?.id && sUser === session.user.id.toLowerCase()) return true
+          if (s.isLocal) return true
+          return false
+        })
+
+        if (isMounted) {
+          setShipments(userShipments)
+          setLoading(false)
+        }
+      } catch (err) {
+        console.error('Failed to load user shipments for overview:', err)
+        if (isMounted) {
+          setShipments([])
+          setLoading(false)
+        }
+      }
+    }
+
+    loadData()
+
+    return () => {
+      isMounted = false
     }
   }, [userEmail, userName, session?.user?.id])
 
   const activeShipments = shipments.filter((s) =>
-    ['LABEL_CREATED', 'PICKUP_SCHEDULED', 'PICKED_UP', 'IN_TRANSIT', 'OUT_FOR_DELIVERY', 'CUSTOMS_CLEARANCE'].includes(s.status)
+    ['PENDING', 'PENDING_PAYMENT', 'PAYMENT_SUBMITTED', 'AWAITING_CONFIRMATION', 'LABEL_CREATED', 'PICKUP_SCHEDULED', 'PICKED_UP', 'IN_TRANSIT', 'OUT_FOR_DELIVERY', 'CUSTOMS_CLEARANCE'].includes(s.status)
   ).length
 
   const deliveredShipments = shipments.filter((s) => s.status === 'DELIVERED').length
   const totalShipments = shipments.length
-  const totalSpent = shipments
-    .filter((s) => s.status === 'LABEL_CREATED' || s.status === 'DELIVERED')
-    .reduce((sum, s) => sum + (Number(s.amount) || Number(s.totalAmount) || 0), 0)
+  const totalSpent = shipments.reduce((sum, s) => sum + (Number(s.amount) || Number(s.totalAmount) || 0), 0)
 
   return (
     <div className="min-h-screen bg-slate-50 py-8 px-4 sm:px-6 lg:px-8">
@@ -148,30 +162,64 @@ export default function CustomerDashboardPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {shipments.map((s) => (
-                    <tr key={s.id || s.trackingNumber} className="hover:bg-slate-50/50">
-                      <td className="p-4 font-mono font-bold text-[#1B2A4A]">{s.trackingNumber}</td>
-                      <td className="p-4 font-medium text-slate-800">{s.recipientName || s.recipient}</td>
-                      <td className="p-4">{s.recipientCity || s.destination || 'Global'}</td>
-                      <td className="p-4 font-medium">{s.serviceType || s.service || 'Express'}</td>
-                      <td className="p-4">
-                        <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-orange-100 text-orange-800">
-                          {(s.status || 'PENDING').replace(/_/g, ' ')}
-                        </span>
-                      </td>
-                      <td className="p-4 font-bold text-slate-800">
-                        {formatCurrency(Number(s.totalAmount || s.amount || 0))}
-                      </td>
-                      <td className="p-4 text-right">
-                        <Link
-                          href={`/tracking?number=${s.trackingNumber}`}
-                          className="text-xs font-semibold text-[#6B2737] hover:underline"
-                        >
-                          Track
-                        </Link>
-                      </td>
-                    </tr>
-                  ))}
+                  {shipments.map((s) => {
+                    const isConfirmed = s.trackingNumber && s.trackingNumber.startsWith('SDP') && !s.trackingNumber.includes('Pending')
+                    const isDelivered = s.status === 'DELIVERED'
+                    const isInTransit = ['IN_TRANSIT', 'PICKED_UP', 'OUT_FOR_DELIVERY', 'ARRIVED_AT_FACILITY'].includes(s.status)
+                    const isAwaitingPay = ['PENDING_PAYMENT', 'DRAFT'].includes(s.status)
+
+                    return (
+                      <tr key={s.id || s.trackingNumber} className="hover:bg-slate-50/50">
+                        <td className="p-4 font-mono font-bold text-[#1B2A4A]">{s.trackingNumber}</td>
+                        <td className="p-4 font-medium text-slate-800">{s.recipientName || s.recipient}</td>
+                        <td className="p-4">{s.recipientCity || s.destination || 'Global'}</td>
+                        <td className="p-4 font-medium">{(s.serviceType || s.service || 'Express').replace(/_/g, ' ')}</td>
+                        <td className="p-4">
+                          <span
+                            className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                              isDelivered
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : isInTransit
+                                ? 'bg-blue-100 text-blue-800'
+                                : isAwaitingPay
+                                ? 'bg-amber-100 text-amber-800'
+                                : 'bg-[#6B2737]/10 text-[#6B2737]'
+                            }`}
+                          >
+                            {(s.status === 'PAYMENT_SUBMITTED' ? 'Awaiting Confirmation' : s.status || 'PENDING').replace(/_/g, ' ')}
+                          </span>
+                        </td>
+                        <td className="p-4 font-bold text-slate-800">
+                          {formatCurrency(Number(s.totalAmount || s.amount || 0))}
+                        </td>
+                        <td className="p-4 text-right space-x-2">
+                          {isAwaitingPay && (
+                            <Link
+                              href={`/pay/${s.id}`}
+                              className="text-xs font-bold text-[#6B2737] hover:underline mr-2"
+                            >
+                              Pay Now
+                            </Link>
+                          )}
+                          {isConfirmed ? (
+                            <Link
+                              href={`/tracking?number=${s.trackingNumber}`}
+                              className="text-xs font-semibold text-blue-600 hover:underline"
+                            >
+                              Track
+                            </Link>
+                          ) : (
+                            <Link
+                              href="/dashboard/shipments"
+                              className="text-xs font-semibold text-slate-500 hover:underline"
+                            >
+                              Details
+                            </Link>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>

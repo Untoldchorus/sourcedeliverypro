@@ -54,11 +54,21 @@ export default function UserProfilePage() {
     ? `CST-${session.user.id.slice(-6).toUpperCase()}`
     : `CST-${Math.abs(displayEmail.split('').reduce((a, b) => (a << 5) - a + b.charCodeAt(0), 0) % 900000 + 100000)}`
 
-  const handleSaveProfile = (e: React.FormEvent) => {
+  const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault()
     if (session?.user?.email) {
       const dataToSave = { name, email, phone, country }
       localStorage.setItem(`sdp_profile_${session.user.email}`, JSON.stringify(dataToSave))
+
+      try {
+        await fetch('/api/user/profile', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, phone }),
+        })
+      } catch (err) {
+        console.warn('Could not sync profile to DB:', err)
+      }
     }
     setProfileSaved(true)
     setTimeout(() => setProfileSaved(false), 3000)
