@@ -82,13 +82,13 @@ function CheckoutContent() {
 
         <div>
           <span className="px-3 py-1 bg-amber-100 text-amber-900 rounded-full text-xs font-bold uppercase tracking-wider">
-            Payment Submitted — Pending Manual Admin Approval
+            Payment Submitted — Pending Confirmation
           </span>
           <h1 className="text-2xl sm:text-3xl font-black text-[#1B2A4A] mt-3">
             Shipment Registered Successfully!
           </h1>
           <p className="text-slate-500 text-xs mt-2">
-            Your payment is now queued for manual verification by SourceDeliveryPro Courier Operations.
+            Your payment is now queued for verification by SourceDeliveryPro Courier Operations.
           </p>
         </div>
 
@@ -96,7 +96,7 @@ function CheckoutContent() {
         <div className="bg-white border border-slate-200 rounded-2xl p-6 text-left space-y-4 shadow-sm text-xs">
           <div className="flex justify-between items-center border-b pb-3 font-semibold text-slate-400 uppercase">
             <span>Transaction Details</span>
-            <span className="text-amber-600 font-bold">Awaiting Admin Verification</span>
+            <span className="text-amber-600 font-bold">Awaiting Confirmation</span>
           </div>
 
           <div className="space-y-2.5 font-mono">

@@ -35,9 +35,9 @@ export async function POST(request: NextRequest) {
           transactionId,
           receiptNumber,
           trackingNumber,
-          status: 'AWAITING_ADMIN_APPROVAL',
+          status: 'AWAITING_CONFIRMATION',
           method,
-          message: 'Payment submitted successfully. Awaiting manual admin approval.',
+          message: 'Payment submitted successfully. Awaiting confirmation.',
         },
       })
     }
@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
         transactionId,
         receiptNumber,
         trackingNumber: updated.shipment.trackingNumber,
-        status: 'AWAITING_ADMIN_APPROVAL',
+        status: 'AWAITING_CONFIRMATION',
       },
     })
   } catch (error) {
@@ -100,8 +100,8 @@ export async function POST(request: NextRequest) {
         transactionId: generateTransactionId(),
         receiptNumber: generateReceiptNumber(),
         trackingNumber: generateTrackingNumber(),
-        status: 'AWAITING_ADMIN_APPROVAL',
-        message: 'Payment submitted successfully. Awaiting manual admin approval.',
+        status: 'AWAITING_CONFIRMATION',
+        message: 'Payment submitted successfully. Awaiting confirmation.',
       },
     })
   }

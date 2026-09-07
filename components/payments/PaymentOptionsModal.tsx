@@ -198,7 +198,7 @@ export function PaymentOptionsModal({
                 <h3 className="text-xl font-bold text-white">Payment Proof Submitted!</h3>
                 <p className="text-xs text-slate-400 max-w-md mx-auto leading-relaxed">
                   Your transaction reference <strong className="text-white font-mono">{transactionId}</strong> has been received. 
-                  Status is now <span className="text-amber-400 font-bold">Awaiting Admin Approval</span>. 
+                  Status is now <span className="text-amber-400 font-bold">Awaiting Confirmation</span>. 
                   Your official receipt and tracking number will be generated immediately once verified.
                 </p>
                 <div className="pt-4 flex flex-wrap justify-center gap-3">

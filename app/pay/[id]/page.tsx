@@ -140,7 +140,7 @@ export default function PayPage() {
           <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 text-xs text-slate-400 space-y-1.5 text-left">
             <div className="flex justify-between">
               <span>Status:</span>
-              <span className="font-bold text-amber-400">Awaiting Admin Approval</span>
+              <span className="font-bold text-amber-400">Awaiting Confirmation</span>
             </div>
             <div className="flex justify-between">
               <span>Shipment Reference:</span>
@@ -153,7 +153,7 @@ export default function PayPage() {
           </div>
 
           <p className="text-[11px] text-slate-500">
-            An administrator will verify your payment against the bank/ledger records and automatically issue your official receipt and shipping label.
+            Your payment is being confirmed against bank/ledger records and your official receipt and shipping label will be issued automatically.
           </p>
 
           <Button

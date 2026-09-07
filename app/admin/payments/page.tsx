@@ -191,7 +191,7 @@ export default function AdminPaymentsPage() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl">
           <span className="text-xs font-bold text-amber-400 uppercase tracking-wider block">
-            Awaiting Admin Approval
+            Awaiting Confirmation
           </span>
           <div className="text-3xl font-black text-amber-400 mt-1">{pendingApprovalCount}</div>
           <span className="text-[11px] text-slate-500 mt-1 block">Proof submitted by payer</span>
