@@ -6,6 +6,8 @@ import { FileText, Download, DollarSign, CheckCircle2, Clock, AlertCircle } from
 import { Button } from '@/components/ui/button'
 import { formatCurrency } from '@/lib/utils'
 
+import { useSession } from 'next-auth/react'
+
 interface Invoice {
   id: string
   invoiceNumber: string
@@ -17,8 +19,12 @@ interface Invoice {
 }
 
 export default function InvoicesPage() {
+  const { data: session } = useSession()
   const [filter, setFilter] = useState<'ALL' | 'UNPAID' | 'PAID'>('ALL')
   const [invoices, setInvoices] = useState<Invoice[]>([])
+
+  const userEmail = session?.user?.email?.toLowerCase() || ''
+  const userName = session?.user?.name?.toLowerCase() || ''
 
   React.useEffect(() => {
     try {
@@ -26,21 +32,37 @@ export default function InvoicesPage() {
       if (savedRaw) {
         const parsed = JSON.parse(savedRaw)
         const list = Array.isArray(parsed) ? parsed : Object.values(parsed)
-        const mapped: Invoice[] = list.map((s: any, idx: number) => ({
+        
+        // Filter strictly by logged-in user
+        const userList = list.filter((s: any) => {
+          const sEmail = (s.senderEmail || '').toLowerCase()
+          const sName = (s.senderName || s.sender || '').toLowerCase()
+          const sUser = (s.userId || '').toLowerCase()
+
+          if (userEmail && sEmail === userEmail) return true
+          if (userName && sName === userName) return true
+          if (session?.user?.id && sUser === session.user.id.toLowerCase()) return true
+          return false
+        })
+
+        const mapped: Invoice[] = userList.map((s: any, idx: number) => ({
           id: s.id || `inv-${idx}`,
           invoiceNumber: s.invoiceNumber || `INV-2026-${Math.floor(10000 + idx * 37)}`,
           trackingNumber: s.trackingNumber || s.id || `SDP-${idx}`,
-          amount: Number(s.amount) || (Number(s.weight) || 2) * 25,
+          amount: Number(s.amount) || Number(s.totalAmount) || (Number(s.weight) || 2) * 25,
           dueDate: s.estimatedDelivery || 'Net 15 Days',
           status: s.status === 'LABEL_CREATED' || s.status === 'DELIVERED' ? 'PAID' : 'UNPAID',
           paidAt: s.receipt?.createdDate || undefined,
         }))
         setInvoices(mapped)
+      } else {
+        setInvoices([])
       }
     } catch (e) {
       console.error(e)
+      setInvoices([])
     }
-  }, [])
+  }, [userEmail, userName, session?.user?.id])
 
   const filtered = invoices.filter((i) => (filter === 'ALL' ? true : i.status === filter))
 

@@ -9,6 +9,8 @@ import {
 import { Button } from '@/components/ui/button'
 import { formatCurrency, formatDate } from '@/lib/utils'
 
+import { useSession } from 'next-auth/react'
+
 interface Shipment {
   id: string
   trackingNumber: string
@@ -17,7 +19,7 @@ interface Shipment {
   senderCity: string
   recipientCity: string
   service: string
-  status: 'PENDING' | 'IN_TRANSIT' | 'DELIVERED' | 'CANCELLED'
+  status: 'PENDING' | 'IN_TRANSIT' | 'DELIVERED' | 'CANCELLED' | 'PENDING_PAYMENT' | 'PAYMENT_SUBMITTED' | 'LABEL_CREATED'
   created: string
   estimated: string
   weight: string
@@ -28,6 +30,7 @@ interface Shipment {
 }
 
 export default function MyShipmentsPage() {
+  const { data: session } = useSession()
   const [tab, setTab] = useState<'ALL' | 'PENDING' | 'IN_TRANSIT' | 'DELIVERED' | 'CANCELLED'>('ALL')
   const [search, setSearch] = useState('')
   const [selectedShipment, setSelectedShipment] = useState<Shipment | null>(null)
@@ -37,55 +40,52 @@ export default function MyShipmentsPage() {
 
   const [shipments, setShipments] = useState<Shipment[]>(defaultShipments)
 
+  const userEmail = session?.user?.email?.toLowerCase() || ''
+  const userName = session?.user?.name?.toLowerCase() || ''
+
   useEffect(() => {
     try {
       const savedRaw = localStorage.getItem('sourcedeliverypro_admin_shipments') || localStorage.getItem('swiftship_admin_shipments')
       if (savedRaw) {
         const overrides = JSON.parse(savedRaw)
-        setShipments((prev) => {
-          const updated = prev.map((s) => {
-            if (overrides[s.id]) {
-              const o = overrides[s.id]
-              return {
-                ...s,
-                trackingNumber: o.trackingNumber || s.trackingNumber,
-                recipient: o.recipientName || o.recipient || s.recipient,
-                senderCity: o.senderCity ? (o.senderCity.includes(',') ? o.senderCity : `${o.senderCity}, US`) : s.senderCity,
-                recipientCity: o.recipientCity ? (o.recipientCity.includes(',') ? o.recipientCity : `${o.recipientCity}, GB`) : s.recipientCity,
-                service: o.serviceType || o.service || s.service,
-                status: o.status || s.status,
-                weight: o.weight ? (o.weight.includes('kg') ? o.weight : `${o.weight} kg`) : s.weight,
-                amount: (o.totalAmount || o.amount) ? parseFloat(o.totalAmount || o.amount) : s.amount,
-              }
-            }
-            return s
-          })
+        const list: any[] = Array.isArray(overrides) ? overrides : Object.values(overrides)
 
-          const existingIds = new Set(prev.map(s => s.id))
-          const newItems = Object.values(overrides)
-            .filter((o: any) => !existingIds.has(o.id))
-            .map((o: any) => ({
-              id: o.id,
-              trackingNumber: o.trackingNumber || 'Pending Approval',
-              sender: o.sender || o.senderName || '',
-              recipient: o.recipient || o.recipientName || '',
-              senderCity: o.senderCity || '',
-              recipientCity: o.recipientCity || '',
-              service: o.serviceType || o.service || 'Standard',
-              status: o.status || 'PENDING',
-              created: o.created || '',
-              estimated: o.estimated || 'Pending',
-              weight: o.weight || '',
-              amount: (o.totalAmount || o.amount) ? parseFloat(o.totalAmount || o.amount) : 0,
-            }))
-            
-          return [...updated, ...newItems]
-        })
+        // Strictly filter to shipments belonging to this user
+        const userItems = list
+          .filter((o: any) => {
+            const sEmail = (o.senderEmail || '').toLowerCase()
+            const sName = (o.senderName || o.sender || '').toLowerCase()
+            const sUser = (o.userId || '').toLowerCase()
+
+            if (userEmail && sEmail === userEmail) return true
+            if (userName && sName === userName) return true
+            if (session?.user?.id && sUser === session.user.id.toLowerCase()) return true
+            return false
+          })
+          .map((o: any) => ({
+            id: o.id,
+            trackingNumber: o.trackingNumber || 'Pending Approval',
+            sender: o.sender || o.senderName || '',
+            recipient: o.recipient || o.recipientName || '',
+            senderCity: o.senderCity || '',
+            recipientCity: o.recipientCity || '',
+            service: o.serviceType || o.service || 'Standard',
+            status: o.status || 'PENDING',
+            created: o.created || '',
+            estimated: o.estimated || o.estimatedDelivery || '3-5 Days',
+            weight: o.weight ? (o.weight.toString().includes('kg') ? o.weight : `${o.weight} kg`) : '',
+            amount: (o.totalAmount || o.amount) ? parseFloat(o.totalAmount || o.amount) : 0,
+          }))
+
+        setShipments(userItems)
+      } else {
+        setShipments([])
       }
     } catch (e) {
       console.error(e)
+      setShipments([])
     }
-  }, [])
+  }, [userEmail, userName, session?.user?.id])
 
   const filtered = shipments.filter((s) => {
     const matchTab = tab === 'ALL' || s.status === tab

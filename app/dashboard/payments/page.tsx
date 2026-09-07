@@ -5,9 +5,14 @@ import Link from 'next/link'
 import { CreditCard, DollarSign, ShieldCheck, CheckCircle2, RefreshCw, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { formatCurrency } from '@/lib/utils'
+import { useSession } from 'next-auth/react'
 
 export default function PaymentsPage() {
+  const { data: session } = useSession()
   const [payments, setPayments] = React.useState<any[]>([])
+
+  const userEmail = session?.user?.email?.toLowerCase() || ''
+  const userName = session?.user?.name?.toLowerCase() || ''
 
   React.useEffect(() => {
     try {
@@ -15,20 +20,36 @@ export default function PaymentsPage() {
       if (savedRaw) {
         const parsed = JSON.parse(savedRaw)
         const list = Array.isArray(parsed) ? parsed : Object.values(parsed)
-        const mapped = list.map((item: any, idx: number) => ({
+        
+        // Filter strictly by logged-in user
+        const userList = list.filter((s: any) => {
+          const sEmail = (s.senderEmail || '').toLowerCase()
+          const sName = (s.senderName || s.sender || '').toLowerCase()
+          const sUser = (s.userId || '').toLowerCase()
+
+          if (userEmail && sEmail === userEmail) return true
+          if (userName && sName === userName) return true
+          if (session?.user?.id && sUser === session.user.id.toLowerCase()) return true
+          return false
+        })
+
+        const mapped = userList.map((item: any, idx: number) => ({
           id: item.id || `local-pay-${idx}`,
           ref: item.transactionId || item.trackingNumber || `PAY-2026-${1000 + idx}`,
           date: item.created || 'Recent',
           method: item.paymentChoice || item.serviceType || item.paymentMethod || 'Manual Transfer',
-          amount: Number(item.amount) || (Number(item.weight) || 2) * 25,
+          amount: Number(item.amount) || Number(item.totalAmount) || (Number(item.weight) || 2) * 25,
           status: item.status === 'LABEL_CREATED' || item.status === 'DELIVERED' ? 'PAID' : (item.status || 'PENDING'),
         }))
         setPayments(mapped)
+      } else {
+        setPayments([])
       }
     } catch (e) {
       console.error(e)
+      setPayments([])
     }
-  }, [])
+  }, [userEmail, userName, session?.user?.id])
 
   const totalSpend = payments.filter((p) => p.status === 'PAID').reduce((sum, p) => sum + (Number(p.amount) || 0), 0)
   const outstandingBalance = payments.filter((p) => p.status !== 'PAID').reduce((sum, p) => sum + (Number(p.amount) || 0), 0)
