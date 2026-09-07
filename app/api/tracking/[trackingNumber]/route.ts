@@ -9,8 +9,14 @@ export async function GET(
     const { trackingNumber } = await params
     const cleanNumber = trackingNumber.trim().toUpperCase()
 
-    const shipment = await db.shipment.findUnique({
-      where: { trackingNumber: cleanNumber },
+    const shipment = await db.shipment.findFirst({
+      where: {
+        OR: [
+          { trackingNumber: { equals: cleanNumber, mode: 'insensitive' } },
+          { shipmentNumber: { equals: cleanNumber, mode: 'insensitive' } },
+          { id: { equals: cleanNumber, mode: 'insensitive' } },
+        ],
+      },
       include: {
         trackingEvents: {
           orderBy: { timestamp: 'desc' },

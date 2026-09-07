@@ -8,7 +8,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { deleteLocalShipment } from '@/lib/payments/manualOptions'
+import { deleteLocalShipment, addDeletedShipment, getDeletedShipments, getLocalShipments } from '@/lib/payments/manualOptions'
 import { useSession } from 'next-auth/react'
 
 interface Shipment {
@@ -39,60 +39,152 @@ export default function MyShipmentsPage() {
   const defaultShipments: Shipment[] = []
 
   const [shipments, setShipments] = useState<Shipment[]>(defaultShipments)
+  const [loading, setLoading] = useState(true)
 
   const userEmail = session?.user?.email?.toLowerCase() || ''
   const userName = session?.user?.name?.toLowerCase() || ''
 
   useEffect(() => {
-    try {
-      const savedRaw = localStorage.getItem('sourcedeliverypro_admin_shipments') || localStorage.getItem('swiftship_admin_shipments')
-      if (savedRaw) {
-        const overrides = JSON.parse(savedRaw)
-        const list: any[] = Array.isArray(overrides) ? overrides : Object.values(overrides)
+    let isMounted = true
 
-        // Strictly filter to shipments belonging to this user
-        const userItems = list
-          .filter((o: any) => {
-            const sEmail = (o.senderEmail || '').toLowerCase()
-            const sName = (o.senderName || o.sender || '').toLowerCase()
-            const sUser = (o.userId || '').toLowerCase()
+    async function loadAllShipments() {
+      try {
+        const localList = getLocalShipments()
+        const deleted = getDeletedShipments()
 
-            if (userEmail && sEmail === userEmail) return true
-            if (userName && sName === userName) return true
-            if (session?.user?.id && sUser === session.user.id.toLowerCase()) return true
-            return false
-          })
-          .map((o: any) => ({
-            id: o.id,
-            trackingNumber: o.trackingNumber || 'Pending Approval',
-            sender: o.sender || o.senderName || '',
-            recipient: o.recipient || o.recipientName || '',
-            senderCity: o.senderCity || '',
-            recipientCity: o.recipientCity || '',
-            service: o.serviceType || o.service || 'Standard',
-            status: o.status || 'PENDING',
-            created: o.created || '',
-            estimated: o.estimated || o.estimatedDelivery || '3-5 Days',
-            weight: o.weight ? (o.weight.toString().includes('kg') ? o.weight : `${o.weight} kg`) : '',
-            amount: (o.totalAmount || o.amount) ? parseFloat(o.totalAmount || o.amount) : 0,
-          }))
+        // 1. Fetch from database API
+        let apiList: any[] = []
+        try {
+          const res = await fetch('/api/shipments')
+          const json = await res.json()
+          if (json.success && Array.isArray(json.data)) {
+            apiList = json.data
+          }
+        } catch {}
 
-        setShipments(userItems)
-      } else {
-        setShipments([])
+        // 2. Combine and deduplicate
+        const map = new Map<string, any>()
+
+        // Put DB items first
+        apiList.forEach((dbItem: any) => {
+          const key = dbItem.trackingNumber || dbItem.id
+          if (key) {
+            map.set(key, {
+              id: dbItem.id,
+              trackingNumber: dbItem.trackingNumber || 'Pending Approval',
+              sender: dbItem.senderName || '',
+              senderName: dbItem.senderName || '',
+              senderEmail: dbItem.senderEmail || '',
+              recipient: dbItem.recipientName || '',
+              recipientName: dbItem.recipientName || '',
+              recipientEmail: dbItem.recipientEmail || '',
+              senderCity: dbItem.senderCity || '',
+              recipientCity: dbItem.recipientCity || '',
+              service: dbItem.serviceType || 'Standard',
+              status: dbItem.status || 'PENDING_PAYMENT',
+              created: dbItem.createdAt ? new Date(dbItem.createdAt).toLocaleDateString() : '',
+              estimated: '3-5 Days',
+              weight: `${Number(dbItem.weight) || 3.5} kg`,
+              amount: Number(dbItem.totalAmount) || 0,
+              userId: dbItem.customerId || '',
+              userEmail: dbItem.senderEmail || '',
+            })
+          }
+        })
+
+        // Overlay local items
+        localList.forEach((localItem: any) => {
+          const key = localItem.trackingNumber || localItem.id
+          if (key) {
+            const existing = map.get(key) || {}
+            map.set(key, {
+              ...existing,
+              ...localItem,
+              id: localItem.id || key,
+              trackingNumber: localItem.trackingNumber || existing.trackingNumber || 'Pending Approval',
+              sender: localItem.sender || localItem.senderName || existing.sender || '',
+              senderName: localItem.senderName || existing.senderName || '',
+              senderEmail: localItem.senderEmail || existing.senderEmail || '',
+              recipient: localItem.recipient || localItem.recipientName || existing.recipient || '',
+              recipientName: localItem.recipientName || existing.recipientName || '',
+              recipientEmail: localItem.recipientEmail || existing.recipientEmail || '',
+              senderCity: localItem.senderCity || existing.senderCity || '',
+              recipientCity: localItem.recipientCity || existing.recipientCity || '',
+              service: localItem.serviceType || localItem.service || existing.service || 'Standard',
+              status: localItem.status || existing.status || 'PENDING_PAYMENT',
+              created: localItem.created || existing.created || '',
+              estimated: localItem.estimated || localItem.estimatedDelivery || existing.estimated || '3-5 Days',
+              weight: localItem.weight ? (localItem.weight.toString().includes('kg') ? localItem.weight : `${localItem.weight} kg`) : existing.weight || '3.5 kg',
+              amount: (localItem.totalAmount || localItem.amount) ? parseFloat(localItem.totalAmount || localItem.amount) : existing.amount || 0,
+              userId: localItem.userId || existing.userId || '',
+              userEmail: localItem.userEmail || localItem.senderEmail || existing.userEmail || '',
+              isLocal: true,
+            })
+          }
+        })
+
+        const combined = Array.from(map.values())
+
+        // 3. Filter out deleted items and seed items
+        const active = combined.filter((s: any) => {
+          const sId = (s.id || '').toLowerCase()
+          const sTrk = (s.trackingNumber || '').toLowerCase()
+          if (deleted.includes(sId) || deleted.includes(sTrk)) return false
+          // Never show seed shipments in customer portal
+          if (sTrk === 'sdp8f4k92lm381' || sTrk === 'sdp993c104kl22' || sTrk === 'sdp77b219kp440') return false
+          return true
+        })
+
+        // 4. Filter by customer ownership, ensuring shipments created in this session are shown
+        const userShipments = active.filter((s: any) => {
+          const sEmail = (s.senderEmail || s.userEmail || '').toLowerCase()
+          const rEmail = (s.recipientEmail || '').toLowerCase()
+          const sName = (s.senderName || s.sender || '').toLowerCase()
+          const sUser = (s.userId || '').toLowerCase()
+
+          if (userEmail && (sEmail === userEmail || rEmail === userEmail)) return true
+          if (userName && sName.includes(userName)) return true
+          if (session?.user?.id && sUser === session.user.id.toLowerCase()) return true
+          
+          // If created in this browser session, show it to the user
+          if (s.isLocal) return true
+
+          return false
+        })
+
+        if (isMounted) {
+          setShipments(userShipments)
+          setLoading(false)
+        }
+      } catch (err) {
+        console.error('Failed to load shipments:', err)
+        if (isMounted) setLoading(false)
       }
-    } catch (e) {
-      console.error(e)
-      setShipments([])
+    }
+
+    loadAllShipments()
+
+    return () => {
+      isMounted = false
     }
   }, [userEmail, userName, session?.user?.id])
 
   const filtered = shipments.filter((s) => {
-    const matchTab = tab === 'ALL' || s.status === tab
+    let matchTab = true
+    if (tab === 'PENDING') {
+      matchTab = s.status === 'PENDING' || s.status === 'PENDING_PAYMENT' || s.status === 'PAYMENT_SUBMITTED' || s.status === 'DRAFT'
+    } else if (tab === 'IN_TRANSIT') {
+      matchTab = s.status === 'IN_TRANSIT' || s.status === 'LABEL_CREATED' || s.status === 'PICKED_UP' || s.status === 'OUT_FOR_DELIVERY' || s.status === 'ARRIVED_AT_FACILITY' || s.status === 'DEPARTED_FACILITY'
+    } else if (tab === 'DELIVERED') {
+      matchTab = s.status === 'DELIVERED'
+    } else if (tab === 'CANCELLED') {
+      matchTab = s.status === 'CANCELLED' || s.status === 'RETURNED'
+    }
     const matchSearch =
       s.trackingNumber.toLowerCase().includes(search.toLowerCase()) ||
       s.recipient.toLowerCase().includes(search.toLowerCase()) ||
-      s.recipientCity.toLowerCase().includes(search.toLowerCase())
+      s.recipientCity.toLowerCase().includes(search.toLowerCase()) ||
+      s.sender.toLowerCase().includes(search.toLowerCase())
     return matchTab && matchSearch
   })
 
@@ -234,11 +326,18 @@ export default function MyShipmentsPage() {
                     <Button
                       size="sm"
                       variant="ghost"
-                      onClick={() => {
+                      onClick={async () => {
                         if (confirm(`Are you sure you want to delete / cancel shipment ${s.trackingNumber || s.id}?`)) {
-                          deleteLocalShipment(s.id)
-                          deleteLocalShipment(s.trackingNumber)
-                          setShipments((prev) => prev.filter((item) => item.id !== s.id && item.trackingNumber !== s.trackingNumber))
+                          const id = s.id
+                          const trk = s.trackingNumber
+                          deleteLocalShipment(id)
+                          if (trk) deleteLocalShipment(trk)
+                          addDeletedShipment(id)
+                          if (trk) addDeletedShipment(trk)
+                          try {
+                            await fetch(`/api/shipments?id=${encodeURIComponent(id || trk)}`, { method: 'DELETE' })
+                          } catch {}
+                          setShipments((prev) => prev.filter((item) => item.id !== id && item.trackingNumber !== trk))
                         }
                       }}
                       className="text-xs text-slate-400 hover:text-red-500 hover:bg-red-50"

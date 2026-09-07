@@ -109,33 +109,51 @@ export default function AdminEditEverythingShipmentPage() {
   const [newRemarkPublic, setNewRemarkPublic] = useState(true)
   const [savedSuccess, setSavedSuccess] = useState(false)
 
-  // Load existing data from localStorage or fallback
+  // Load existing data from localStorage or API fallback
   useEffect(() => {
-    try {
-      const allShipments = getLocalShipments()
-      const found = allShipments.find(
-        (s: any) =>
-          (s.id && s.id.toString().toLowerCase() === shipmentId.toLowerCase()) ||
-          (s.trackingNumber && s.trackingNumber.toString().toLowerCase() === shipmentId.toLowerCase()) ||
-          (s.awb && s.awb.toString().toLowerCase() === shipmentId.toLowerCase())
-      )
+    async function loadShipmentData() {
+      try {
+        const allShipments = getLocalShipments()
+        let found = allShipments.find(
+          (s: any) =>
+            (s.id && s.id.toString().toLowerCase() === shipmentId.toLowerCase()) ||
+            (s.trackingNumber && s.trackingNumber.toString().toLowerCase() === shipmentId.toLowerCase()) ||
+            (s.awb && s.awb.toString().toLowerCase() === shipmentId.toLowerCase())
+        )
 
-      if (found) {
-        setFormData((prev) => ({
-          ...prev,
-          ...found,
-          id: found.id || prev.id,
-          trackingNumber: found.trackingNumber || found.awb || prev.trackingNumber,
-          showMap: found.showMap !== undefined ? Boolean(found.showMap) : true,
-          currentLocation: found.currentLocation || found.location || prev.currentLocation,
-          mapQuery: found.mapQuery || prev.mapQuery,
-          remarks: Array.isArray(found.remarks) ? found.remarks : prev.remarks,
-          events: Array.isArray(found.events) ? found.events : prev.events,
-        }))
+        if (!found) {
+          try {
+            const res = await fetch(`/api/tracking/${encodeURIComponent(shipmentId)}`)
+            const json = await res.json()
+            if (json.success && json.data) {
+              found = json.data
+            }
+          } catch {}
+        }
+
+        if (found) {
+          setFormData((prev) => ({
+            ...prev,
+            ...found,
+            id: found.id || prev.id,
+            trackingNumber: found.trackingNumber || found.awb || prev.trackingNumber,
+            senderName: found.senderName || found.sender || prev.senderName,
+            recipientName: found.recipientName || found.recipient || prev.recipientName,
+            senderCity: found.senderCity || found.originCity || prev.senderCity,
+            recipientCity: found.recipientCity || found.destinationCity || prev.recipientCity,
+            showMap: found.showMap !== undefined ? Boolean(found.showMap) : true,
+            currentLocation: found.currentLocation || found.location || prev.currentLocation,
+            mapQuery: found.mapQuery || prev.mapQuery,
+            remarks: Array.isArray(found.remarks) ? found.remarks : prev.remarks,
+            events: Array.isArray(found.events) ? found.events : prev.events,
+          }))
+        }
+      } catch (err) {
+        console.error('Error loading shipment for edit:', err)
       }
-    } catch (err) {
-      console.error('Error loading shipment for edit:', err)
     }
+
+    loadShipmentData()
   }, [shipmentId])
 
   // Save all changes

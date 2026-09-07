@@ -24,7 +24,7 @@ import {
   ShieldCheck,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { getLocalShipments, saveLocalShipment } from '@/lib/payments/manualOptions'
+import { getLocalShipments, saveLocalShipment, getDeletedShipments } from '@/lib/payments/manualOptions'
 
 const DEFAULT_SEED_SHIPMENTS = [
   {
@@ -177,19 +177,56 @@ export default function TrackingOverridesPage() {
 
   const [saved, setSaved] = useState(false)
 
-  // Load shipments on mount
-  const loadShipments = () => {
+  // Load shipments on mount (respecting deleted blacklist)
+  const loadShipments = async () => {
     try {
+      const deleted = getDeletedShipments()
       const local = getLocalShipments()
       const mergedMap = new Map<string, any>()
 
-      // 1. Seed defaults first
-      DEFAULT_SEED_SHIPMENTS.forEach((s) => mergedMap.set(s.id, s))
+      // 1. Seed defaults ONLY if not deleted
+      DEFAULT_SEED_SHIPMENTS.forEach((s) => {
+        const sId = s.id.toLowerCase()
+        const sTrk = (s.trackingNumber || '').toLowerCase()
+        if (!deleted.includes(sId) && !deleted.includes(sTrk)) {
+          mergedMap.set(s.id, s)
+        }
+      })
 
-      // 2. Overlay existing stored shipments
+      // 2. Fetch from database API
+      try {
+        const res = await fetch('/api/shipments')
+        const json = await res.json()
+        if (json.success && Array.isArray(json.data)) {
+          json.data.forEach((dbItem: any) => {
+            const key = dbItem.trackingNumber || dbItem.id
+            const dId = (dbItem.id || '').toLowerCase()
+            const dTrk = (dbItem.trackingNumber || '').toLowerCase()
+            if (key && !deleted.includes(dId) && !deleted.includes(dTrk)) {
+              mergedMap.set(key, {
+                id: dbItem.id,
+                trackingNumber: dbItem.trackingNumber || key,
+                currentLocation: `${dbItem.senderCity || 'Processing Hub'}, ${dbItem.senderCountry || 'US'}`,
+                mapQuery: `${dbItem.senderCity || 'New York'},${dbItem.senderCountry || 'USA'}`,
+                showMap: true,
+                status: dbItem.status || 'PENDING_PAYMENT',
+                recipient: dbItem.recipientName || 'Customer',
+                origin: dbItem.senderCity || 'Origin Facility',
+                destination: dbItem.recipientCity || 'Destination Hub',
+                remarks: [],
+                events: [],
+              })
+            }
+          })
+        }
+      } catch {}
+
+      // 3. Overlay existing stored shipments (excluding deleted)
       local.forEach((s: any) => {
         const key = s.trackingNumber || s.id
-        if (key) {
+        const sId = (s.id || '').toLowerCase()
+        const sTrk = (s.trackingNumber || '').toLowerCase()
+        if (key && !deleted.includes(sId) && !deleted.includes(sTrk)) {
           const existing = mergedMap.get(key) || {}
           mergedMap.set(key, {
             ...existing,

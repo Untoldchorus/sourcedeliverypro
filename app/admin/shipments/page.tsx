@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { Box, Search, Edit3, CheckCircle2, Globe, MessageSquare, ExternalLink, MapPin, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { formatCurrency } from '@/lib/utils'
-import { getLocalShipments, saveLocalShipment, deleteLocalShipment } from '@/lib/payments/manualOptions'
+import { getLocalShipments, saveLocalShipment, deleteLocalShipment, getDeletedShipments, addDeletedShipment } from '@/lib/payments/manualOptions'
 
 const ALL_STATUSES = [
   'DRAFT',
@@ -93,19 +93,58 @@ export default function AdminShipmentsPage() {
   const [search, setSearch] = useState('')
   const [statusSaved, setStatusSaved] = useState<string | null>(null)
 
-  // Load shipments from localStorage or fallback to defaults
-  const loadShipments = () => {
+  // Load shipments from database API, localStorage, and seeds (respecting deleted blacklist)
+  const loadShipments = async () => {
     try {
+      const deleted = getDeletedShipments()
       const localList = getLocalShipments()
       const map = new Map<string, any>()
 
-      // 1. Put defaults first
-      DEFAULT_SEED_SHIPMENTS.forEach((s) => map.set(s.id, s))
+      // 1. Put defaults ONLY if they have not been deleted
+      DEFAULT_SEED_SHIPMENTS.forEach((s) => {
+        const sId = s.id.toLowerCase()
+        const sTrk = (s.trackingNumber || '').toLowerCase()
+        if (!deleted.includes(sId) && !deleted.includes(sTrk)) {
+          map.set(s.id, s)
+        }
+      })
 
-      // 2. Override or add from local storage
+      // 2. Fetch all shipments from database API
+      try {
+        const res = await fetch('/api/shipments')
+        const json = await res.json()
+        if (json.success && Array.isArray(json.data)) {
+          json.data.forEach((dbItem: any) => {
+            const key = dbItem.trackingNumber || dbItem.id
+            const dId = (dbItem.id || '').toLowerCase()
+            const dTrk = (dbItem.trackingNumber || '').toLowerCase()
+            if (key && !deleted.includes(dId) && !deleted.includes(dTrk)) {
+              map.set(key, {
+                id: dbItem.id,
+                trackingNumber: dbItem.trackingNumber || key,
+                sender: `${dbItem.senderName || 'Sender'} (${dbItem.senderCity || 'Origin'})`,
+                recipient: `${dbItem.recipientName || 'Recipient'} (${dbItem.recipientCity || 'Destination'})`,
+                service: dbItem.serviceType || 'Express Courier',
+                driver: 'Assigned Carrier Driver',
+                facility: 'Regional Hub',
+                status: dbItem.status || 'PENDING_PAYMENT',
+                amount: Number(dbItem.totalAmount) || 145.5,
+                currentLocation: `${dbItem.senderCity || 'Operations Dispatch'}, ${dbItem.senderCountry || 'US'}`,
+                mapQuery: `${dbItem.senderCity || 'New York'},${dbItem.senderCountry || 'USA'}`,
+                showMap: true,
+                remarks: [],
+              })
+            }
+          })
+        }
+      } catch {}
+
+      // 3. Overlay or add from local storage (excluding deleted)
       localList.forEach((s: any) => {
         const key = s.id || s.trackingNumber
-        if (key) {
+        const sId = (s.id || '').toLowerCase()
+        const sTrk = (s.trackingNumber || '').toLowerCase()
+        if (key && !deleted.includes(sId) && !deleted.includes(sTrk)) {
           const existing = map.get(key) || {}
           map.set(key, {
             ...existing,
@@ -285,11 +324,18 @@ export default function AdminShipmentsPage() {
                       <Button
                         size="sm"
                         variant="ghost"
-                        onClick={() => {
+                        onClick={async () => {
                           if (confirm(`Permanently delete shipment ${s.trackingNumber || s.id}?`)) {
-                            deleteLocalShipment(s.id)
-                            deleteLocalShipment(s.trackingNumber)
-                            setShipments((prev) => prev.filter((item) => item.id !== s.id && item.trackingNumber !== s.trackingNumber))
+                            const id = s.id
+                            const trk = s.trackingNumber
+                            deleteLocalShipment(id)
+                            if (trk) deleteLocalShipment(trk)
+                            addDeletedShipment(id)
+                            if (trk) addDeletedShipment(trk)
+                            try {
+                              await fetch(`/api/shipments?id=${encodeURIComponent(id || trk)}`, { method: 'DELETE' })
+                            } catch {}
+                            setShipments((prev) => prev.filter((item) => item.id !== id && item.trackingNumber !== trk))
                           }
                         }}
                         className="text-slate-400 hover:text-red-400 hover:bg-red-500/10 text-xs p-2"

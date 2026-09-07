@@ -7,7 +7,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { formatCurrency } from '@/lib/utils'
-import { getLocalReceipts, saveLocalReceipt, deleteLocalReceipt } from '@/lib/payments/manualOptions'
+import { getLocalReceipts, saveLocalReceipt, deleteLocalReceipt, getDeletedReceipts, addDeletedReceipt } from '@/lib/payments/manualOptions'
 
 export interface AdminReceipt {
   id: string
@@ -26,40 +26,7 @@ export interface AdminReceipt {
   notes?: string
 }
 
-const DEFAULT_RECEIPTS: AdminReceipt[] = [
-  {
-    id: 'rcpt-1',
-    receiptNumber: 'RCPT-2026-89421',
-    version: 1,
-    customerName: 'Marcus Vance',
-    customerEmail: 'driver@sourcedeliverypro.com',
-    trackingNumber: 'SDP8F4K92LM381',
-    paymentRef: 'PAY-2026-44012',
-    paymentMethod: 'Zelle Direct Transfer',
-    subtotal: 135.5,
-    tax: 10.0,
-    total: 145.5,
-    status: 'PAID',
-    createdDate: 'Sep 06, 2026',
-    notes: 'Standard air freight handling with express customs clearance.',
-  },
-  {
-    id: 'rcpt-2',
-    receiptNumber: 'RCPT-2026-67104',
-    version: 1,
-    customerName: 'Hans Weber',
-    customerEmail: 'manager@sourcedeliverypro.com',
-    trackingNumber: 'SDP77B219KP440',
-    paymentRef: 'PAY-2026-11928',
-    paymentMethod: 'Bank Wire Transfer',
-    subtotal: 88.0,
-    tax: 10.75,
-    total: 98.75,
-    status: 'PAID',
-    createdDate: 'Sep 05, 2026',
-    notes: 'Consignment settled in full via domestic wire clearing.',
-  },
-]
+const DEFAULT_RECEIPTS: AdminReceipt[] = []
 
 export default function AdminReceiptsPage() {
   const [receipts, setReceipts] = useState<AdminReceipt[]>([])
@@ -86,14 +53,9 @@ export default function AdminReceiptsPage() {
   const loadReceipts = () => {
     try {
       const stored = getLocalReceipts()
-      if (stored && stored.length > 0) {
-        setReceipts(stored)
-      } else {
-        setReceipts(DEFAULT_RECEIPTS)
-        DEFAULT_RECEIPTS.forEach((r) => saveLocalReceipt(r))
-      }
+      setReceipts(stored || [])
     } catch {
-      setReceipts(DEFAULT_RECEIPTS)
+      setReceipts([])
     }
   }
 
@@ -161,6 +123,8 @@ export default function AdminReceiptsPage() {
     if (!deletingReceipt) return
     deleteLocalReceipt(deletingReceipt.id)
     deleteLocalReceipt(deletingReceipt.receiptNumber)
+    addDeletedReceipt(deletingReceipt.id)
+    addDeletedReceipt(deletingReceipt.receiptNumber)
     setReceipts((prev) => prev.filter((r) => r.id !== deletingReceipt.id && r.receiptNumber !== deletingReceipt.receiptNumber))
     setDeletingReceipt(null)
   }

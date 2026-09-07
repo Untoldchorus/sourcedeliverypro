@@ -85,6 +85,30 @@ export const MANUAL_PAYMENT_METHODS: ManualPaymentMethod[] = [
 ]
 
 // Unified LocalStorage Shipment Helper
+export function getDeletedShipments(): string[] {
+  if (typeof window === 'undefined') return []
+  try {
+    const raw = localStorage.getItem('sourcedeliverypro_deleted_shipments')
+    return raw ? JSON.parse(raw) : []
+  } catch {
+    return []
+  }
+}
+
+export function addDeletedShipment(idOrTracking: string) {
+  if (typeof window === 'undefined' || !idOrTracking) return
+  try {
+    const deleted = getDeletedShipments()
+    const target = idOrTracking.toLowerCase()
+    if (!deleted.includes(target)) {
+      deleted.push(target)
+      localStorage.setItem('sourcedeliverypro_deleted_shipments', JSON.stringify(deleted))
+    }
+  } catch (err) {
+    console.error('Failed to record deleted shipment', err)
+  }
+}
+
 export function getLocalShipments(): any[] {
   if (typeof window === 'undefined') return []
   try {
@@ -92,12 +116,17 @@ export function getLocalShipments(): any[] {
     if (!raw) return []
     const parsed = JSON.parse(raw)
     const rawList: any[] = Array.isArray(parsed) ? parsed : Object.values(parsed)
+    const deleted = getDeletedShipments()
     
-    // Strictly deduplicate by id and trackingNumber
+    // Strictly deduplicate by id and trackingNumber and exclude deleted
     const seen = new Set<string>()
     const deduplicated: any[] = []
     for (const item of rawList) {
       if (!item) continue
+      const sId = (item.id || '').toLowerCase()
+      const sTrk = (item.trackingNumber || '').toLowerCase()
+      if (deleted.includes(sId) || deleted.includes(sTrk)) continue
+
       const key = item.trackingNumber || item.id
       if (key && !seen.has(key)) {
         seen.add(key)
@@ -142,6 +171,7 @@ export function deleteLocalShipment(idOrTracking: string) {
   if (typeof window === 'undefined' || !idOrTracking) return
   try {
     const target = idOrTracking.toLowerCase()
+    addDeletedShipment(idOrTracking)
     const existing = getLocalShipments().filter((s) => {
       const sId = (s.id || '').toLowerCase()
       const sTrk = (s.trackingNumber || '').toLowerCase()
@@ -160,6 +190,30 @@ export function deleteLocalShipment(idOrTracking: string) {
   }
 }
 
+export function getDeletedReceipts(): string[] {
+  if (typeof window === 'undefined') return []
+  try {
+    const raw = localStorage.getItem('sourcedeliverypro_deleted_receipts')
+    return raw ? JSON.parse(raw) : []
+  } catch {
+    return []
+  }
+}
+
+export function addDeletedReceipt(idOrNumber: string) {
+  if (typeof window === 'undefined' || !idOrNumber) return
+  try {
+    const deleted = getDeletedReceipts()
+    const target = idOrNumber.toLowerCase()
+    if (!deleted.includes(target)) {
+      deleted.push(target)
+      localStorage.setItem('sourcedeliverypro_deleted_receipts', JSON.stringify(deleted))
+    }
+  } catch (err) {
+    console.error('Failed to record deleted receipt', err)
+  }
+}
+
 export function getLocalReceipts(): any[] {
   if (typeof window === 'undefined') return []
   try {
@@ -167,12 +221,19 @@ export function getLocalReceipts(): any[] {
     if (!raw) return []
     const parsed = JSON.parse(raw)
     const rawList: any[] = Array.isArray(parsed) ? parsed : Object.values(parsed)
+    const deleted = getDeletedReceipts()
     
-    // Deduplicate by receiptNumber or id
+    // Deduplicate by receiptNumber or id and remove mock receipts and deleted receipts
     const seen = new Set<string>()
     const deduplicated: any[] = []
     for (const r of rawList) {
       if (!r) continue
+      const rId = (r.id || '').toLowerCase()
+      const rNum = (r.receiptNumber || '').toLowerCase()
+      // Purge mock dummy receipts and deleted receipts
+      if (rId === 'rcpt-1' || rId === 'rcpt-2' || rNum === 'rcpt-2026-89421' || rNum === 'rcpt-2026-67104') continue
+      if (deleted.includes(rId) || deleted.includes(rNum)) continue
+
       const key = r.receiptNumber || r.id
       if (key && !seen.has(key)) {
         seen.add(key)
@@ -206,6 +267,7 @@ export function deleteLocalReceipt(idOrNumber: string) {
   if (typeof window === 'undefined' || !idOrNumber) return
   try {
     const target = idOrNumber.toLowerCase()
+    addDeletedReceipt(idOrNumber)
     const existing = getLocalReceipts().filter((r) => {
       const rId = (r.id || '').toLowerCase()
       const rNum = (r.receiptNumber || '').toLowerCase()

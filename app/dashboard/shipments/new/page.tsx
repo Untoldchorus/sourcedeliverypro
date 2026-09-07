@@ -65,7 +65,7 @@ export default function NewShipmentPage() {
   const weightNum = parseFloat(formData.weight) || 3.5
   const estimatedAmount = Math.round((weightNum * 25 + 40) * 100) / 100
 
-  const handleCreateShipment = (e: React.FormEvent) => {
+  const handleCreateShipment = async (e: React.FormEvent) => {
     e.preventDefault()
 
     const trackingNumber = generateSDPTracking()
@@ -76,15 +76,20 @@ export default function NewShipmentPage() {
       trackingNumber,
       status: 'PENDING_PAYMENT',
       userId: session?.user?.id || '',
+      userEmail: session?.user?.email || formData.senderEmail || '',
+      userName: session?.user?.name || formData.senderName || '',
+      createdBy: session?.user?.email || session?.user?.id || 'customer',
       sender: formData.senderName,
       senderName: formData.senderName,
       senderEmail: formData.senderEmail,
       senderPhone: formData.senderPhone,
+      senderAddress: formData.senderAddress,
       senderCity: formData.senderCity,
       recipient: formData.recipientName,
       recipientName: formData.recipientName,
       recipientEmail: formData.recipientEmail,
       recipientPhone: formData.recipientPhone,
+      recipientAddress: formData.recipientAddress,
       recipientCity: formData.recipientCity,
       origin: formData.senderCity,
       destination: formData.recipientCity,
@@ -98,9 +103,26 @@ export default function NewShipmentPage() {
       description: formData.description,
     }
 
+    // 1. Immediately save to local storage
     saveLocalShipment(newShipment)
     setCreatedShipment(newShipment)
     setShowPaymentModal(true)
+
+    // 2. Persist to database API in background
+    try {
+      await fetch('/api/shipments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...newShipment,
+          senderCountry: 'US',
+          recipientCountry: 'GB',
+          weight: weightNum,
+        }),
+      })
+    } catch (err) {
+      console.error('Database sync deferred:', err)
+    }
   }
 
   return (
