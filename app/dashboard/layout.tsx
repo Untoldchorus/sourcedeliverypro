@@ -138,7 +138,12 @@ export default function CustomerDashboardLayout({
             </div>
             <button
               type="button"
-              onClick={() => signOut({ callbackUrl: '/login' })}
+              onClick={async () => {
+                try {
+                  await signOut({ redirect: false })
+                } catch {}
+                window.location.href = '/login'
+              }}
               title="Sign Out"
               className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-700/50 rounded-lg transition"
             >

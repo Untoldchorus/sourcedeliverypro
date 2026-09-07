@@ -76,6 +76,36 @@ export const authConfig: NextAuthConfig = {
 
       return true
     },
+    async redirect({ url, baseUrl }) {
+      // Relative url
+      if (url.startsWith('/')) {
+        if (baseUrl.includes('localhost') && process.env.NODE_ENV === 'production') {
+          const prodUrl = process.env.NEXT_PUBLIC_APP_URL && !process.env.NEXT_PUBLIC_APP_URL.includes('localhost')
+            ? process.env.NEXT_PUBLIC_APP_URL
+            : process.env.VERCEL_PROJECT_PRODUCTION_URL
+            ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+            : 'https://sourcedeliverypro.vercel.app'
+          return `${prodUrl}${url}`
+        }
+        return `${baseUrl}${url}`
+      }
+
+      // Check if destination is allowed domain
+      try {
+        const parsed = new URL(url)
+        if (
+          parsed.origin === baseUrl ||
+          parsed.hostname.includes('sourcedeliverypro.vercel.app') ||
+          parsed.hostname.includes('vercel.app') ||
+          parsed.hostname === 'localhost' ||
+          parsed.hostname === '127.0.0.1'
+        ) {
+          return url
+        }
+      } catch {}
+
+      return baseUrl
+    },
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id || ''

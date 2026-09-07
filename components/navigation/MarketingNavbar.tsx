@@ -138,7 +138,12 @@ export function MarketingNavbar() {
                   </Link>
                   <button
                     type="button"
-                    onClick={() => signOut({ callbackUrl: '/' })}
+                    onClick={async () => {
+                      try {
+                        await signOut({ redirect: false })
+                      } catch {}
+                      window.location.href = '/login'
+                    }}
                     className="px-3 py-2 rounded-lg text-xs font-semibold text-slate-300 hover:text-white hover:bg-white/10 transition-colors"
                   >
                     Log Out
@@ -228,9 +233,12 @@ export function MarketingNavbar() {
                     </Link>
                     <button
                       type="button"
-                      onClick={() => {
+                      onClick={async () => {
                         setMobileOpen(false)
-                        signOut({ callbackUrl: '/' })
+                        try {
+                          await signOut({ redirect: false })
+                        } catch {}
+                        window.location.href = '/login'
                       }}
                       className="w-full text-center px-4 py-2 rounded-lg text-xs font-semibold text-slate-400 hover:text-white border border-slate-700 hover:bg-white/10"
                     >

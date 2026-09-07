@@ -420,8 +420,13 @@ export function Navbar() {
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem
-                      className="text-red-600 dark:text-red-400 focus:text-red-600 dark:focus:text-red-400"
-                      onClick={() => signOut({ callbackUrl: '/' })}
+                      className="text-red-600 dark:text-red-400 focus:text-red-600 dark:focus:text-red-400 cursor-pointer"
+                      onClick={async () => {
+                        try {
+                          await signOut({ redirect: false })
+                        } catch {}
+                        window.location.href = '/login'
+                      }}
                     >
                       <LogOut className="mr-2 h-4 w-4" />
                       Sign Out
@@ -561,9 +566,12 @@ export function Navbar() {
                       <Button
                         variant="outline"
                         className="w-full text-red-600 border-red-200 hover:bg-red-50"
-                        onClick={() => {
+                        onClick={async () => {
                           setMobileOpen(false)
-                          signOut({ callbackUrl: '/' })
+                          try {
+                            await signOut({ redirect: false })
+                          } catch {}
+                          window.location.href = '/login'
                         }}
                       >
                         <LogOut className="w-4 h-4 mr-2" />
