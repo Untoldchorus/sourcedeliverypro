@@ -24,7 +24,8 @@ import { formatCurrency } from '@/lib/utils'
 import {
   getLocalShipments,
   saveLocalShipment,
-  saveLocalReceipt
+  saveLocalReceipt,
+  getUnifiedShipments
 } from '@/lib/payments/manualOptions'
 
 export default function AdminPaymentsPage() {
@@ -38,10 +39,15 @@ export default function AdminPaymentsPage() {
   const [viewingReceipt, setViewingReceipt] = useState<any | null>(null)
   const [copiedLink, setCopiedLink] = useState<string | null>(null)
 
-  const loadData = () => {
-    const list = getLocalShipments()
-    setPayments(list)
-    setLoading(false)
+  const loadData = async () => {
+    try {
+      const list = await getUnifiedShipments()
+      setPayments(list)
+    } catch {
+      setPayments(getLocalShipments())
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => {
@@ -161,7 +167,10 @@ export default function AdminPaymentsPage() {
   }
 
   // Helper status checkers
-  const isPendingApproval = (p: any) => p.status === 'PAYMENT_SUBMITTED' || p.status === 'AWAITING_ADMIN_APPROVAL'
+  const isPendingApproval = (p: any) =>
+    p.status === 'PAYMENT_SUBMITTED' ||
+    p.status === 'AWAITING_ADMIN_APPROVAL' ||
+    p.status === 'AWAITING_CONFIRMATION'
   const isPendingPayment = (p: any) => p.status === 'PENDING_PAYMENT' || p.status === 'DRAFT'
   const isApproved = (p: any) => p.status === 'LABEL_CREATED' || p.status === 'APPROVED' || p.status === 'IN_TRANSIT' || p.status === 'DELIVERED' || p.receiptGenerated
   const isRejected = (p: any) => p.status === 'PAYMENT_REJECTED' || p.status === 'REJECTED'
