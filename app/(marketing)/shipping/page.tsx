@@ -1,7 +1,8 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { useSession } from 'next-auth/react'
 import {
   Package, User, MapPin, Truck, ShieldCheck, CheckCircle2,
   AlertCircle, ArrowRight, ArrowLeft, RefreshCw, CreditCard
@@ -14,11 +15,20 @@ import { saveLocalShipment } from '@/lib/payments/manualOptions'
 
 export default function CreateShipmentPage() {
   const router = useRouter()
+  const { data: session, status } = useSession()
   const [step, setStep] = useState(1)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [createdShipment, setCreatedShipment] = useState<any>(null)
   const [showPaymentModal, setShowPaymentModal] = useState(false)
+
+  useEffect(() => {
+    if (status === 'unauthenticated') {
+      router.replace('/login?callbackUrl=' + encodeURIComponent('/dashboard/shipments/new'))
+    } else if (status === 'authenticated') {
+      router.replace('/dashboard/shipments/new')
+    }
+  }, [status, router])
 
   const [formData, setFormData] = useState({
     // Step 1: Sender

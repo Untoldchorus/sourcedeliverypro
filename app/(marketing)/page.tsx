@@ -1,6 +1,9 @@
 'use client'
 
+import React from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { useSession } from 'next-auth/react'
 import {
   Package, Plane, Truck, Ship, ShieldCheck, Globe, Clock,
   ArrowRight, CheckCircle2, ChevronRight, BarChart3, Building,
@@ -10,10 +13,47 @@ import { Button } from '@/components/ui/button'
 import { TestimonialsCarousel } from '@/components/testimonials/TestimonialsCarousel'
 
 export default function HomePage() {
+  const router = useRouter()
+  const { data: session } = useSession()
+
+  const handleCreateShipmentClick = (e: React.MouseEvent) => {
+    e.preventDefault()
+    if (session?.user) {
+      router.push('/dashboard/shipments/new')
+    } else {
+      router.push('/login?callbackUrl=' + encodeURIComponent('/dashboard/shipments/new'))
+    }
+  }
+
   return (
     <div>
+      {/* ── Quick Tracking Bar (Above Hero Section) ── */}
+      <section className="relative z-20 border-b border-white/10 py-3.5 sm:py-4" style={{ backgroundColor: '#0F1A2E' }}>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-4 border border-white/10 max-w-xl">
+            <p className="text-xs font-semibold mb-2" style={{ color: '#C9B8B0' }}>📦 Quick Track — Enter your AWB number</p>
+            <form action="/tracking" method="get" className="flex gap-2">
+              <input
+                name="number"
+                type="text"
+                placeholder="Enter AWB or tracking number (e.g. SDP...)"
+                className="flex-1 px-4 py-3 rounded-xl font-mono text-sm text-white placeholder-white/40 focus:outline-none focus:ring-1 focus:ring-[#C27F88]"
+                style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)' }}
+              />
+              <button
+                type="submit"
+                className="px-5 py-3 rounded-xl font-bold text-white text-sm flex items-center gap-2 transition hover:opacity-90 cursor-pointer shrink-0"
+                style={{ background: '#6B2737' }}
+              >
+                <Search className="w-4 h-4" /> Track
+              </button>
+            </form>
+          </div>
+        </div>
+      </section>
+
       {/* ── Hero Section ── */}
-      <section className="relative text-white pt-28 pb-36 overflow-hidden bg-[#1B2A4A]">
+      <section className="relative text-white pt-16 pb-28 sm:pt-20 sm:pb-36 overflow-hidden bg-[#1B2A4A]">
         {/* Background image with overlay */}
         <div 
           className="absolute inset-0 z-0 opacity-40 mix-blend-luminosity" 
@@ -39,36 +79,25 @@ export default function HomePage() {
               <span className="text-white">Worldwide.</span>
             </h1>
 
-            <p className="text-lg mb-10 max-w-2xl leading-relaxed" style={{ color: '#C9B8B0' }}>
+            <p className="text-lg mb-8 max-w-2xl leading-relaxed" style={{ color: '#C9B8B0' }}>
               SourceDeliveryPro delivers packages to 220+ countries with real-time tracking, customs clearance, live map updates, and instant notifications — all in one platform.
             </p>
 
-            {/* Inline tracking search */}
-            <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-4 mb-8 border border-white/10 max-w-xl">
-              <p className="text-xs font-semibold mb-2" style={{ color: '#C9B8B0' }}>📦 Quick Track — Enter your AWB number</p>
-              <form action="/tracking" method="get" className="flex gap-2">
-                <input
-                  name="number"
-                  type="text"
-                  placeholder="Enter AWB or tracking number (e.g. SDP...)"
-                  className="flex-1 px-4 py-3 rounded-xl font-mono text-sm text-white placeholder-white/40 focus:outline-none"
-                  style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)' }}
-                />
-                <button
-                  type="submit"
-                  className="px-5 py-3 rounded-xl font-bold text-white text-sm flex items-center gap-2 transition hover:opacity-90"
-                  style={{ background: '#6B2737' }}
-                >
-                  <Search className="w-4 h-4" /> Track
-                </button>
-              </form>
-            </div>
-
             <div className="flex flex-wrap gap-4">
-              <Button asChild size="lg" className="font-bold text-base px-8 h-12 text-white shadow-lg border-0" style={{ background: '#6B2737' }}>
-                <Link href="/shipping">Create Shipment <ArrowRight className="ml-2 w-4 h-4" /></Link>
+              <Button
+                asChild
+                size="lg"
+                className="font-bold text-base px-8 h-12 text-white shadow-lg border-0 cursor-pointer"
+                style={{ background: '#6B2737' }}
+              >
+                <Link
+                  href={session?.user ? '/dashboard/shipments/new' : '/login?callbackUrl=' + encodeURIComponent('/dashboard/shipments/new')}
+                  onClick={handleCreateShipmentClick}
+                >
+                  Create Shipment <ArrowRight className="ml-2 w-4 h-4" />
+                </Link>
               </Button>
-              <Button asChild variant="outline" size="lg" className="text-base px-8 h-12 font-semibold" style={{ borderColor: 'rgba(255,255,255,0.3)', color: 'white', background: 'transparent' }}>
+              <Button asChild variant="outline" size="lg" className="text-base px-8 h-12 font-semibold cursor-pointer" style={{ borderColor: 'rgba(255,255,255,0.3)', color: 'white', background: 'transparent' }}>
                 <Link href="/services">Explore Services</Link>
               </Button>
             </div>

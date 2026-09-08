@@ -1,14 +1,16 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, Suspense } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { signIn } from 'next-auth/react'
 import { Package, Lock, Mail, AlertCircle, RefreshCw, ArrowRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const callbackUrl = searchParams.get('callbackUrl') || '/dashboard'
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -29,7 +31,7 @@ export default function LoginPage() {
       if (res?.error) {
         setError('Invalid email or password. Please try again.')
       } else {
-        router.push('/dashboard')
+        router.push(callbackUrl)
         router.refresh()
       }
     } catch (err) {
@@ -122,5 +124,19 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center bg-slate-50">
+          <RefreshCw className="w-6 h-6 animate-spin text-[#6B2737]" />
+        </div>
+      }
+    >
+      <LoginForm />
+    </Suspense>
   )
 }

@@ -34,15 +34,10 @@ export const authConfig: NextAuthConfig = {
       const isAdmin = pathname.startsWith('/admin')
       const isStaff = pathname.startsWith('/staff')
       const isDriver = pathname.startsWith('/driver')
-      const isProtected = isDashboard || isAdmin || isStaff || isDriver
-
-      // On localhost or in dev, never aggressively kick out users
-      const isLocalhost = nextUrl.hostname === 'localhost' || nextUrl.hostname === '127.0.0.1'
+      const isShipping = pathname === '/shipping' || (pathname.startsWith('/shipping/') && pathname !== '/shipping/quote')
+      const isProtected = isDashboard || isAdmin || isStaff || isDriver || isShipping
 
       if (isProtected && !isLoggedIn) {
-        if (process.env.NODE_ENV === 'development' || isLocalhost) {
-          return true
-        }
         return Response.redirect(new URL(`/login?callbackUrl=${encodeURIComponent(pathname)}`, nextUrl))
       }
 
