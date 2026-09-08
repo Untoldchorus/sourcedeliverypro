@@ -38,6 +38,25 @@ export async function GET(
       )
     }
 
+    // Extract showMap, currentLocation, and mapQuery if stored in metadata or model
+    let showMap = true
+    let mapQuery: string | undefined = undefined
+    let currentLocation = shipment.senderCity ? `${shipment.senderCity}, ${shipment.senderCountry || 'US'}` : undefined
+
+    if ((shipment as any).showMap !== undefined && (shipment as any).showMap !== null) {
+      showMap = Boolean((shipment as any).showMap)
+    }
+    if (shipment.specialInstructions) {
+      try {
+        if (shipment.specialInstructions.startsWith('{')) {
+          const parsed = JSON.parse(shipment.specialInstructions)
+          if (parsed.showMap !== undefined) showMap = Boolean(parsed.showMap)
+          if (parsed.mapQuery) mapQuery = parsed.mapQuery
+          if (parsed.currentLocation) currentLocation = parsed.currentLocation
+        }
+      } catch {}
+    }
+
     // Public sanitized representation
     return NextResponse.json({
       success: true,
@@ -58,11 +77,14 @@ export async function GET(
         packageCount: shipment.packageCount,
         estimatedDelivery: shipment.estimatedDelivery,
         actualDelivery: shipment.actualDelivery,
+        currentLocation: currentLocation || (shipment.trackingEvents?.[0]?.city) || shipment.senderCity,
+        mapQuery,
+        showMap,
         events: shipment.trackingEvents.map((evt) => ({
           id: evt.id,
           status: evt.status,
           description: evt.description,
-          location: evt.location,
+          location: evt.location || evt.city,
           city: evt.city,
           country: evt.country,
           facilityName: evt.facilityName,

@@ -148,7 +148,7 @@ function mergeAdminOverride(data: TrackingData): TrackingData {
       status: override.status ?? data.status,
       currentLocation: override.currentLocation ?? override.location ?? data.currentLocation,
       mapQuery: override.mapQuery ?? data.mapQuery,
-      showMap: override.showMap !== undefined ? Boolean(override.showMap) : true,
+      showMap: override.showMap !== undefined ? Boolean(override.showMap) : (data.showMap !== undefined ? Boolean(data.showMap) : true),
       remarks: override.remarks ?? (data as any).remarks ?? [],
       estimatedDelivery: override.estimatedDelivery ?? data.estimatedDelivery,
       events: override.events && override.events.length > 0 ? override.events : data.events,

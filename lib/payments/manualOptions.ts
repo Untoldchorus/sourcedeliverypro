@@ -332,8 +332,12 @@ export async function getUnifiedShipments(): Promise<any[]> {
           dbItem.paymentTxId
         )
 
-        let status = dbItem.status || 'PENDING_PAYMENT'
-        if (dbItem.displayStatus === 'PAYMENT_SUBMITTED' || status === 'PROCESSING' || (status === 'PENDING_PAYMENT' && hasPaymentTx)) {
+        let status = dbItem.displayStatus || dbItem.status || 'PENDING_PAYMENT'
+        if (dbItem.status === 'PAYMENT_FAILED' || dbItem.payment?.status === 'FAILED') {
+          status = 'PAYMENT_REJECTED'
+        } else if (dbItem.status === 'LABEL_CREATED' || dbItem.status === 'APPROVED' || dbItem.payment?.status === 'PAID') {
+          status = 'LABEL_CREATED'
+        } else if (dbItem.displayStatus === 'PAYMENT_SUBMITTED' || status === 'PROCESSING' || (status === 'PENDING_PAYMENT' && hasPaymentTx)) {
           status = 'PAYMENT_SUBMITTED'
         }
 
@@ -360,6 +364,7 @@ export async function getUnifiedShipments(): Promise<any[]> {
           serviceType: dbItem.serviceType || 'Standard',
           status,
           rawStatus: dbItem.status,
+          showMap: dbItem.showMap !== undefined ? Boolean(dbItem.showMap) : true,
           paymentTxId,
           paymentMethod,
           paymentPayer,
@@ -401,6 +406,16 @@ export async function getUnifiedShipments(): Promise<any[]> {
       const key = existingKey || trk || sid
       if (key) {
         const existing = map.get(key) || {}
+
+        // Determine authoritative status: DB definitive status takes precedence over stale local cache
+        const dbStatus = existing.status || existing.rawStatus
+        let finalStatus = localItem.status || dbStatus || 'PENDING_PAYMENT'
+        if (dbStatus && ['LABEL_CREATED', 'PAYMENT_REJECTED', 'PAYMENT_FAILED', 'IN_TRANSIT', 'OUT_FOR_DELIVERY', 'DELIVERED'].includes(dbStatus)) {
+          finalStatus = dbStatus
+        } else if (localItem.status === 'PAYMENT_REJECTED' || localItem.status === 'LABEL_CREATED') {
+          finalStatus = localItem.status
+        }
+
         map.set(key, {
           ...existing,
           ...localItem,
@@ -417,7 +432,8 @@ export async function getUnifiedShipments(): Promise<any[]> {
           destination: (localItem.recipientCity || existing.recipientCity) ? `${localItem.recipientCity || existing.recipientCity}` : '',
           service: localItem.serviceType || localItem.service || existing.service || 'Standard',
           serviceType: localItem.serviceType || localItem.service || existing.serviceType || 'Standard',
-          status: localItem.status || existing.status || 'PENDING_PAYMENT',
+          status: finalStatus,
+          showMap: existing.showMap !== undefined ? Boolean(existing.showMap) : (localItem.showMap !== undefined ? Boolean(localItem.showMap) : true),
           created: localItem.created || existing.created || '',
           createdAt: localItem.createdAt || existing.createdAt,
           estimated: localItem.estimated || localItem.estimatedDelivery || existing.estimated || '3-5 Days',

@@ -29,6 +29,12 @@ export function normalizeShipmentStatus(val?: string): string {
   if (v === 'PAYMENT_SUBMITTED' || v === 'AWAITING_CONFIRMATION' || v === 'AWAITING_ADMIN_APPROVAL') {
     return 'PROCESSING'
   }
+  if (v === 'PAYMENT_REJECTED' || v === 'REJECTED' || v === 'PAYMENT_FAILED') {
+    return 'PAYMENT_FAILED'
+  }
+  if (v === 'APPROVED') {
+    return 'LABEL_CREATED'
+  }
   const valid = [
     'DRAFT', 'PENDING_PAYMENT', 'PAYMENT_FAILED', 'LABEL_CREATED',
     'PICKUP_SCHEDULED', 'PICKED_UP', 'PROCESSING', 'IN_TRANSIT',
@@ -447,7 +453,27 @@ export async function GET(request: NextRequest) {
         (s.payment?.paymentReference && !s.payment.paymentReference.startsWith('PAY-')) ||
         paymentMetadata.paymentTxId
       )
-      const isAwaitingVerification = s.status === 'PROCESSING' || (s.status === 'PENDING_PAYMENT' && hasPaymentTx)
+      const isRejected = s.status === 'PAYMENT_FAILED' || s.payment?.status === 'FAILED'
+      const isAwaitingVerification = !isRejected && (s.status === 'PROCESSING' || (s.status === 'PENDING_PAYMENT' && hasPaymentTx))
+
+      let displayStatus = s.status as string
+      if (isRejected) {
+        displayStatus = 'PAYMENT_REJECTED'
+      } else if (isAwaitingVerification) {
+        displayStatus = 'PAYMENT_SUBMITTED'
+      }
+
+      let showMap = true
+      if ((s as any).showMap !== undefined && (s as any).showMap !== null) {
+        showMap = Boolean((s as any).showMap)
+      } else if (s.specialInstructions) {
+        try {
+          if (s.specialInstructions.startsWith('{')) {
+            const parsed = JSON.parse(s.specialInstructions)
+            if (parsed.showMap !== undefined) showMap = Boolean(parsed.showMap)
+          }
+        } catch {}
+      }
 
       const creatorName = s.createdBy?.name || s.customer?.user?.name || s.customer?.companyName || s.senderName || 'Customer'
       const creatorEmail = s.createdBy?.email || s.customer?.user?.email || s.senderEmail || ''
@@ -455,7 +481,8 @@ export async function GET(request: NextRequest) {
 
       return {
         ...s,
-        displayStatus: isAwaitingVerification ? 'PAYMENT_SUBMITTED' : s.status,
+        showMap,
+        displayStatus,
         paymentTxId: paymentMetadata.paymentTxId || (s.payment?.paymentReference && !s.payment.paymentReference.startsWith('PAY-') ? s.payment.paymentReference : undefined),
         paymentMethod: paymentMetadata.paymentMethod || s.payment?.provider,
         paymentPayer: paymentMetadata.paymentPayer || creatorName,
@@ -548,16 +575,30 @@ export async function PATCH(request: NextRequest) {
           { shipmentNumber: idOrTracking },
         ],
       },
+      include: {
+        trackingEvents: {
+          orderBy: { timestamp: 'desc' },
+          take: 1,
+        },
+      },
     }).catch(() => null)
 
     if (!shipment) {
       return NextResponse.json({ success: true, message: 'Shipment update acknowledged' })
     }
 
+    const isReject = body.status === 'PAYMENT_REJECTED' || body.status === 'REJECTED'
+    const isApprove = body.status === 'LABEL_CREATED' || body.status === 'APPROVED'
+
     const updateData: any = {}
-    if (body.status) {
+    if (isReject) {
+      updateData.status = 'PAYMENT_FAILED'
+    } else if (isApprove) {
+      updateData.status = 'LABEL_CREATED'
+    } else if (body.status) {
       updateData.status = normalizeShipmentStatus(body.status)
     }
+
     if (body.trackingNumber && body.trackingNumber.startsWith('SDP') && !body.trackingNumber.includes('Pending')) {
       updateData.trackingNumber = body.trackingNumber
     }
@@ -571,11 +612,55 @@ export async function PATCH(request: NextRequest) {
     if (body.recipientName) updateData.recipientName = body.recipientName
     if (body.senderName) updateData.senderName = body.senderName
 
+    // Handle showMap boolean and mapQuery
+    if (body.showMap !== undefined) {
+      const showMapBool = Boolean(body.showMap)
+      updateData.showMap = showMapBool
+      try {
+        let extra: any = {}
+        if (shipment.specialInstructions && shipment.specialInstructions.startsWith('{')) {
+          extra = JSON.parse(shipment.specialInstructions)
+        }
+        extra.showMap = showMapBool
+        if (body.currentLocation) extra.currentLocation = body.currentLocation
+        if (body.mapQuery) extra.mapQuery = body.mapQuery
+        updateData.specialInstructions = JSON.stringify(extra)
+      } catch {}
+    }
+
     await db.$transaction(async (tx) => {
-      await tx.shipment.update({
-        where: { id: shipment.id },
-        data: updateData,
-      })
+      try {
+        await tx.shipment.update({
+          where: { id: shipment.id },
+          data: updateData,
+        })
+      } catch {
+        // Fallback if showMap column is still pending migration on DB
+        const { showMap, ...rest } = updateData
+        await tx.shipment.update({
+          where: { id: shipment.id },
+          data: rest,
+        })
+      }
+
+      // If payment rejection
+      if (isReject) {
+        await tx.payment.updateMany({
+          where: { shipmentId: shipment.id },
+          data: {
+            status: 'FAILED',
+            metadata: {
+              rejectionReason: body.rejectionReason || body.remark || 'Payment verification rejected by admin',
+              rejectedAt: new Date().toISOString(),
+            },
+          },
+        }).catch(() => null)
+
+        await tx.invoice.updateMany({
+          where: { shipmentId: shipment.id },
+          data: { status: 'FAILED' },
+        }).catch(() => null)
+      }
 
       // If payment submission info provided, update payment record
       if (body.paymentTxId || body.paymentMethod || body.status === 'PAYMENT_SUBMITTED') {
@@ -596,7 +681,7 @@ export async function PATCH(request: NextRequest) {
       }
 
       // If status changed to LABEL_CREATED, DELIVERED, or APPROVED, mark payment & invoice as PAID
-      if (['LABEL_CREATED', 'DELIVERED', 'APPROVED'].includes(updateData.status || body.status)) {
+      if (isApprove || ['LABEL_CREATED', 'DELIVERED', 'APPROVED'].includes(updateData.status || body.status)) {
         await tx.payment.updateMany({
           where: { shipmentId: shipment.id },
           data: { status: 'PAID' },
@@ -608,18 +693,48 @@ export async function PATCH(request: NextRequest) {
         }).catch(() => null)
       }
 
-      // If remarks or location or status provided, record tracking event
-      if (body.remark || body.currentLocation || body.status) {
-        const desc = body.remark || (body.status ? `Shipment status updated to ${body.status.replace(/_/g, ' ')}` : 'Operational checkpoint update')
-        await tx.trackingEvent.create({
-          data: {
-            shipmentId: shipment.id,
-            status: updateData.status || shipment.status,
-            description: desc,
-            city: body.currentLocation || shipment.senderCity,
-            country: shipment.senderCountry || 'US',
-          },
-        }).catch(() => null)
+      // ─── Timeline Events Handling ───
+      const rawTimeline = body.timelineEvents || body.events
+      if (Array.isArray(rawTimeline) && rawTimeline.length > 0) {
+        // Explicit timeline sync from admin editor - replace cleanly
+        await tx.trackingEvent.deleteMany({ where: { shipmentId: shipment.id } }).catch(() => null)
+        for (const evt of rawTimeline) {
+          await tx.trackingEvent.create({
+            data: {
+              shipmentId: shipment.id,
+              status: normalizeShipmentStatus(evt.status || shipment.status) as any,
+              description: evt.description || evt.event || 'Milestone event',
+              city: evt.city || evt.location || 'Dispatch Facility',
+              country: evt.country || shipment.senderCountry || 'US',
+              timestamp: evt.timestamp ? new Date(evt.timestamp) : new Date(),
+            },
+          }).catch(() => null)
+        }
+      } else {
+        // Prevent duplicate tracking events: only insert if status, location, or explicit remark actually changed!
+        const latestEvent = shipment.trackingEvents?.[0]
+        const statusChanged = Boolean(updateData.status && updateData.status !== shipment.status)
+        const locationChanged = Boolean(body.currentLocation && body.currentLocation !== (latestEvent?.city || shipment.senderCity))
+        const hasExplicitRemark = Boolean(body.newRemark?.trim())
+
+        if (hasExplicitRemark || statusChanged || locationChanged) {
+          const desc = body.newRemark?.trim() ||
+            (statusChanged
+              ? (isReject
+                  ? `Payment rejected: ${body.rejectionReason || 'Verification declined'}`
+                  : `Shipment status updated to ${(updateData.status || '').replace(/_/g, ' ')}`)
+              : `Operational checkpoint at ${body.currentLocation || shipment.senderCity}`)
+
+          await tx.trackingEvent.create({
+            data: {
+              shipmentId: shipment.id,
+              status: updateData.status || shipment.status,
+              description: desc,
+              city: body.currentLocation || latestEvent?.city || shipment.senderCity,
+              country: shipment.senderCountry || 'US',
+            },
+          }).catch(() => null)
+        }
       }
     })
 

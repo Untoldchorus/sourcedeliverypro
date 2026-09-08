@@ -2,7 +2,27 @@
 
 import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { Box, Search, Edit3, CheckCircle2, Globe, MessageSquare, ExternalLink, MapPin, Trash2, User } from 'lucide-react'
+import {
+  Box,
+  Search,
+  Edit3,
+  CheckCircle2,
+  Globe,
+  MessageSquare,
+  ExternalLink,
+  MapPin,
+  Trash2,
+  User,
+  X,
+  Plus,
+  RefreshCw,
+  Calendar,
+  Eye,
+  EyeOff,
+  Save,
+  Check,
+  AlertCircle
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { formatCurrency } from '@/lib/utils'
 import { getLocalShipments, saveLocalShipment, deleteLocalShipment, getDeletedShipments, addDeletedShipment } from '@/lib/payments/manualOptions'
@@ -96,6 +116,35 @@ export default function AdminShipmentsPage() {
   const [shipments, setShipments] = useState<any[]>([])
   const [search, setSearch] = useState('')
   const [statusSaved, setStatusSaved] = useState<string | null>(null)
+  const [successToast, setSuccessToast] = useState<string | null>(null)
+
+  // ─── Pop-Out Edit Modal State ───
+  const [editingShipment, setEditingShipment] = useState<any | null>(null)
+  const [isSavingEdit, setIsSavingEdit] = useState(false)
+  const [editForm, setEditForm] = useState<{
+    id: string
+    trackingNumber: string
+    status: string
+    service: string
+    currentLocation: string
+    mapQuery: string
+    showMap: boolean
+    events: any[]
+  }>({
+    id: '',
+    trackingNumber: '',
+    status: 'IN_TRANSIT',
+    service: 'Express Courier',
+    currentLocation: '',
+    mapQuery: '',
+    showMap: true,
+    events: [],
+  })
+
+  // New Milestone inputs inside modal
+  const [newMilestoneStatus, setNewMilestoneStatus] = useState('IN_TRANSIT')
+  const [newMilestoneLocation, setNewMilestoneLocation] = useState('')
+  const [newMilestoneDesc, setNewMilestoneDesc] = useState('')
 
   // Load shipments from database API, localStorage, and seeds (respecting deleted blacklist)
   const loadShipments = async () => {
@@ -234,6 +283,119 @@ export default function AdminShipmentsPage() {
     setTimeout(() => setStatusSaved(null), 2000)
   }
 
+  // ─── Open Pop-Out Modal ───
+  const openEditModal = async (shipment: any) => {
+    setEditingShipment(shipment)
+    setNewMilestoneStatus(shipment.status || 'IN_TRANSIT')
+    setNewMilestoneLocation(shipment.currentLocation || '')
+    setNewMilestoneDesc('')
+
+    let eventsList = Array.isArray(shipment.events) && shipment.events.length > 0 ? shipment.events : []
+
+    // If events are not in local item, fetch from tracking API
+    if (eventsList.length === 0 && shipment.trackingNumber) {
+      try {
+        const res = await fetch(`/api/tracking/${encodeURIComponent(shipment.trackingNumber)}`)
+        const json = await res.json()
+        if (json.success && json.data?.events && json.data.events.length > 0) {
+          eventsList = json.data.events
+        }
+      } catch {}
+    }
+
+    setEditForm({
+      id: shipment.id,
+      trackingNumber: shipment.trackingNumber,
+      status: shipment.status || 'IN_TRANSIT',
+      service: shipment.service || 'Express Courier',
+      currentLocation: shipment.currentLocation || '',
+      mapQuery: shipment.mapQuery || '',
+      showMap: shipment.showMap !== undefined ? Boolean(shipment.showMap) : true,
+      events: eventsList,
+    })
+  }
+
+  // Add Milestone Checkpoint inside Modal
+  const handleAddModalMilestone = () => {
+    if (!newMilestoneDesc.trim()) return
+
+    const newEvt = {
+      id: 'evt-' + Date.now(),
+      status: newMilestoneStatus,
+      description: newMilestoneDesc.trim(),
+      location: newMilestoneLocation.trim() || editForm.currentLocation || 'Dispatch Facility',
+      city: newMilestoneLocation.trim() || editForm.currentLocation || 'Dispatch Facility',
+      timestamp: new Date().toISOString(),
+    }
+
+    setEditForm((prev) => ({
+      ...prev,
+      events: [newEvt, ...prev.events],
+      status: newMilestoneStatus,
+      currentLocation: newMilestoneLocation.trim() || prev.currentLocation,
+    }))
+
+    setNewMilestoneDesc('')
+  }
+
+  // Delete Milestone Checkpoint inside Modal
+  const handleDeleteModalMilestone = (evtId: string) => {
+    setEditForm((prev) => ({
+      ...prev,
+      events: prev.events.filter((e) => e.id !== evtId),
+    }))
+  }
+
+  // ─── Save Changes in Modal ───
+  const handleSaveModal = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (isSavingEdit || !editingShipment) return
+
+    setIsSavingEdit(true)
+    try {
+      const updatedShipment = {
+        ...editingShipment,
+        status: editForm.status,
+        currentLocation: editForm.currentLocation,
+        mapQuery: editForm.mapQuery,
+        showMap: editForm.showMap,
+        events: editForm.events,
+      }
+
+      // 1. Save to local storage
+      saveLocalShipment(updatedShipment)
+
+      // 2. Sync to DB via PATCH /api/shipments
+      await fetch('/api/shipments', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: editForm.id,
+          trackingNumber: editForm.trackingNumber,
+          status: editForm.status,
+          currentLocation: editForm.currentLocation,
+          mapQuery: editForm.mapQuery,
+          showMap: editForm.showMap,
+          timelineEvents: editForm.events,
+        }),
+      }).catch((err) => console.warn('Modal DB sync error:', err))
+
+      // 3. Reload shipments list
+      await loadShipments()
+
+      // 4. Close the pop-out modal immediately!
+      setEditingShipment(null)
+
+      // 5. Show success notification
+      setSuccessToast(`Shipment ${editForm.trackingNumber} and timeline updated successfully!`)
+      setTimeout(() => setSuccessToast(null), 4000)
+    } catch (err) {
+      console.error('Failed to save shipment edits:', err)
+    } finally {
+      setIsSavingEdit(false)
+    }
+  }
+
   const filtered = shipments.filter(
     (s) =>
       (s.trackingNumber || '').toLowerCase().includes(search.toLowerCase()) ||
@@ -366,10 +528,22 @@ export default function AdminShipmentsPage() {
                       </div>
                     </td>
                     <td className="p-3 font-bold text-emerald-400">{formatCurrency(s.amount)}</td>
-                    <td className="p-3 text-right space-x-1.5">
-                      <Button asChild size="sm" className="bg-[#6B2737] hover:bg-[#521b28] text-white font-bold text-xs">
+                    <td className="p-3 text-right space-x-1.5 whitespace-nowrap">
+                      <Button
+                        size="sm"
+                        onClick={() => openEditModal(s)}
+                        className="bg-[#6B2737] hover:bg-[#521b28] text-white font-bold text-xs cursor-pointer shadow-sm"
+                      >
+                        <Edit3 className="w-3.5 h-3.5 mr-1" /> Quick Edit / Timeline
+                      </Button>
+                      <Button
+                        asChild
+                        size="sm"
+                        variant="outline"
+                        className="border-slate-800 text-slate-400 hover:text-white hover:bg-slate-850 text-xs"
+                      >
                         <Link href={`/admin/shipments/${s.id || s.trackingNumber}`}>
-                          <Edit3 className="w-3.5 h-3.5 mr-1" /> Edit All
+                          Full Form
                         </Link>
                       </Button>
                       <Button
@@ -409,6 +583,260 @@ export default function AdminShipmentsPage() {
           </table>
         </div>
       </div>
+
+      {/* ─── POP-OUT EDIT MODAL (CLOSES ON SAVE, PREVENTS DUPLICATE CLICKS) ─── */}
+      {editingShipment && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto animate-in fade-in duration-200">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col space-y-5 my-8">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+              <div>
+                <h2 className="text-lg font-black text-white flex items-center gap-2">
+                  <Edit3 className="w-5 h-5 text-[#6B2737]" />
+                  Edit Shipment &amp; Timeline
+                </h2>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="font-mono text-xs text-[#C27F88] font-bold">
+                    {editForm.trackingNumber}
+                  </span>
+                  <span className="text-[11px] text-slate-500">· ID: {editForm.id}</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingShipment(null)}
+                className="text-slate-400 hover:text-white p-2 rounded-xl hover:bg-slate-800 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Form Scrollable Area */}
+            <form onSubmit={handleSaveModal} className="overflow-y-auto flex-1 pr-1 space-y-6 text-xs text-slate-300">
+              {/* SECTION: Status & Map Controls */}
+              <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-4">
+                <h3 className="font-bold text-white text-xs uppercase tracking-wider flex items-center gap-1.5">
+                  <Globe className="w-4 h-4 text-blue-400" />
+                  Status &amp; Live Map Telemetry
+                </h3>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-semibold mb-1 text-slate-400">Shipment Status</label>
+                    <select
+                      value={editForm.status}
+                      onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white font-bold text-xs focus:ring-1 focus:ring-[#6B2737]"
+                    >
+                      {ALL_STATUSES.map((st) => (
+                        <option key={st} value={st}>
+                          {st.replace(/_/g, ' ')}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Live Map Switch */}
+                  <div>
+                    <label className="block font-semibold mb-1 text-slate-400">Live Map Display Switch</label>
+                    <button
+                      type="button"
+                      onClick={() => setEditForm({ ...editForm, showMap: !editForm.showMap })}
+                      className={`w-full px-3 py-2 rounded-xl border flex items-center justify-between font-bold text-xs transition cursor-pointer ${
+                        editForm.showMap
+                          ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20'
+                          : 'bg-slate-900 border-slate-800 text-slate-400 hover:bg-slate-850'
+                      }`}
+                    >
+                      <span className="flex items-center gap-1.5">
+                        {editForm.showMap ? <Eye className="w-4 h-4 text-emerald-400" /> : <EyeOff className="w-4 h-4 text-slate-500" />}
+                        {editForm.showMap ? 'Live Map: ON' : 'Live Map: OFF'}
+                      </span>
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full ${editForm.showMap ? 'bg-emerald-500 text-slate-950' : 'bg-slate-800 text-slate-400'}`}>
+                        {editForm.showMap ? 'VISIBLE' : 'HIDDEN'}
+                      </span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Current Location Input */}
+                <div>
+                  <label className="block font-semibold mb-1 text-slate-400">Current Checkpoint Location</label>
+                  <input
+                    type="text"
+                    value={editForm.currentLocation}
+                    onChange={(e) => setEditForm({ ...editForm, currentLocation: e.target.value })}
+                    placeholder="e.g. Frankfurt Cargo Sorting Terminal, Germany"
+                    className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs focus:ring-1 focus:ring-[#6B2737]"
+                  />
+                </div>
+
+                {/* Map Search Query */}
+                <div>
+                  <label className="block font-semibold mb-1 text-slate-400">Google Maps Search Query</label>
+                  <input
+                    type="text"
+                    value={editForm.mapQuery}
+                    onChange={(e) => setEditForm({ ...editForm, mapQuery: e.target.value })}
+                    placeholder="e.g. Frankfurt+Germany or London,UK"
+                    className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs focus:ring-1 focus:ring-[#6B2737]"
+                  />
+                </div>
+
+                {/* Quick Presets */}
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  {[
+                    { label: 'London, UK', q: 'London,UK', loc: 'London Heathrow Gateway Hub, UK' },
+                    { label: 'New York, US', q: 'New York,USA', loc: 'JFK International Airport Hub, NY' },
+                    { label: 'Frankfurt, DE', q: 'Frankfurt,Germany', loc: 'Frankfurt Cargo Sorting Terminal, DE' },
+                    { label: 'Lagos, NG', q: 'Lagos,Nigeria', loc: 'Murtala Muhammed Freight Facility, Lagos' },
+                  ].map((p) => (
+                    <button
+                      key={p.label}
+                      type="button"
+                      onClick={() => setEditForm({ ...editForm, currentLocation: p.loc, mapQuery: p.q })}
+                      className="px-2 py-1 rounded-lg bg-slate-900 hover:bg-[#6B2737] hover:text-white text-slate-400 text-[10px] font-medium transition cursor-pointer"
+                    >
+                      📍 {p.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* SECTION: Timeline Events Editor */}
+              <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                  <h3 className="font-bold text-white text-xs uppercase tracking-wider flex items-center gap-1.5">
+                    <Calendar className="w-4 h-4 text-amber-400" />
+                    Timeline Milestones Editor
+                  </h3>
+                  <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                    {editForm.events.length} Milestones
+                  </span>
+                </div>
+
+                {/* Add New Milestone Form */}
+                <div className="p-3 bg-slate-900/90 rounded-xl border border-slate-800 space-y-2.5">
+                  <p className="font-bold text-white text-[11px]">Add Milestone Event</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[10px] text-slate-400 mb-1">Status</label>
+                      <select
+                        value={newMilestoneStatus}
+                        onChange={(e) => setNewMilestoneStatus(e.target.value)}
+                        className="w-full px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-white text-xs"
+                      >
+                        {ALL_STATUSES.map((st) => (
+                          <option key={st} value={st}>
+                            {st.replace(/_/g, ' ')}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-slate-400 mb-1">Location</label>
+                      <input
+                        type="text"
+                        value={newMilestoneLocation}
+                        onChange={(e) => setNewMilestoneLocation(e.target.value)}
+                        placeholder="e.g. Frankfurt Cargo Hub, DE"
+                        className="w-full px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-white text-xs"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-slate-400 mb-1">Description / Activity</label>
+                    <input
+                      type="text"
+                      value={newMilestoneDesc}
+                      onChange={(e) => setNewMilestoneDesc(e.target.value)}
+                      placeholder="e.g. Cargo scanned and cleared export terminal."
+                      className="w-full px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-white text-xs"
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    onClick={handleAddModalMilestone}
+                    disabled={!newMilestoneDesc.trim()}
+                    className="w-full bg-slate-800 hover:bg-[#6B2737] text-white font-bold text-xs py-1.5"
+                  >
+                    <Plus className="w-3.5 h-3.5 mr-1" /> Add Milestone to Timeline
+                  </Button>
+                </div>
+
+                {/* Existing Milestones List */}
+                <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                  {editForm.events.length > 0 ? (
+                    editForm.events.map((evt, idx) => (
+                      <div
+                        key={evt.id || idx}
+                        className="p-3 rounded-xl bg-slate-900 border border-slate-800/80 flex items-start justify-between gap-3"
+                      >
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className="px-2 py-0.5 rounded text-[9px] font-extrabold uppercase bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                              {(evt.status || 'EVENT').replace(/_/g, ' ')}
+                            </span>
+                            <span className="text-[10px] text-slate-500">
+                              {evt.timestamp ? new Date(evt.timestamp).toLocaleString() : 'Recent'}
+                            </span>
+                          </div>
+                          <p className="font-semibold text-white text-xs">{evt.description || evt.event}</p>
+                          <p className="text-[10px] text-slate-400 flex items-center gap-1">
+                            <MapPin className="w-2.5 h-2.5 text-[#6B2737]" />
+                            {evt.location || evt.city || 'Hub Facility'}
+                          </p>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteModalMilestone(evt.id)}
+                          className="text-slate-500 hover:text-red-400 p-1.5 rounded-lg hover:bg-slate-800 transition cursor-pointer"
+                          title="Remove milestone"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="p-4 rounded-xl border border-dashed border-slate-800 text-center text-slate-500 text-xs">
+                      No milestones recorded on this shipment timeline yet. Add one above.
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Modal Footer Actions */}
+              <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-800">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setEditingShipment(null)}
+                  disabled={isSavingEdit}
+                  className="border-slate-800 text-slate-400 hover:bg-slate-800 text-xs"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={isSavingEdit}
+                  className="bg-[#6B2737] hover:bg-[#521b28] text-white font-bold px-6 text-xs shadow-md"
+                >
+                  {isSavingEdit ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 mr-1.5 animate-spin" /> Saving Changes...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4 mr-1.5" /> Save Changes
+                    </>
+                  )}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

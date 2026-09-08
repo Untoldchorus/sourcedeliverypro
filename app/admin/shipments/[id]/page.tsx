@@ -22,7 +22,8 @@ import {
   Package,
   ExternalLink,
   ShieldCheck,
-  AlertCircle
+  AlertCircle,
+  RefreshCw
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { saveLocalShipment, getLocalShipments } from '@/lib/payments/manualOptions'
@@ -108,6 +109,7 @@ export default function AdminEditEverythingShipmentPage() {
   const [newRemarkCategory, setNewRemarkCategory] = useState('Operational Update')
   const [newRemarkPublic, setNewRemarkPublic] = useState(true)
   const [savedSuccess, setSavedSuccess] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
 
   // Load existing data from localStorage or API fallback
   useEffect(() => {
@@ -135,15 +137,19 @@ export default function AdminEditEverythingShipmentPage() {
           setFormData((prev) => ({
             ...prev,
             ...found,
-            id: found.id || prev.id,
+            id: found.id || found.trackingNumber || shipmentId,
             trackingNumber: found.trackingNumber || found.awb || prev.trackingNumber,
-            senderName: found.senderName || found.sender || prev.senderName,
-            recipientName: found.recipientName || found.recipient || prev.recipientName,
-            senderCity: found.senderCity || found.originCity || prev.senderCity,
-            recipientCity: found.recipientCity || found.destinationCity || prev.recipientCity,
-            showMap: found.showMap !== undefined ? Boolean(found.showMap) : true,
+            status: found.status || prev.status,
+            serviceType: found.serviceType || found.service || prev.serviceType,
             currentLocation: found.currentLocation || found.location || prev.currentLocation,
             mapQuery: found.mapQuery || prev.mapQuery,
+            showMap: found.showMap !== undefined ? Boolean(found.showMap) : prev.showMap,
+            senderName: found.senderName || found.sender || prev.senderName,
+            senderCity: found.senderCity || prev.senderCity,
+            recipientName: found.recipientName || found.recipient || prev.recipientName,
+            recipientCity: found.recipientCity || prev.recipientCity,
+            weight: found.weight ? found.weight.toString().replace(' kg', '') : prev.weight,
+            totalAmount: (found.totalAmount || found.amount || prev.totalAmount).toString(),
             remarks: Array.isArray(found.remarks) ? found.remarks : prev.remarks,
             events: Array.isArray(found.events) ? found.events : prev.events,
           }))
@@ -159,6 +165,8 @@ export default function AdminEditEverythingShipmentPage() {
   // Save all changes
   const handleSave = async (e?: React.FormEvent) => {
     if (e) e.preventDefault()
+    if (isSaving) return
+    setIsSaving(true)
     try {
       saveLocalShipment(formData)
 
@@ -178,6 +186,9 @@ export default function AdminEditEverythingShipmentPage() {
           recipientName: formData.recipientName,
           recipientCity: formData.recipientCity,
           currentLocation: formData.currentLocation,
+          mapQuery: formData.mapQuery,
+          showMap: formData.showMap !== undefined ? Boolean(formData.showMap) : true,
+          timelineEvents: formData.events && formData.events.length > 0 ? formData.events : undefined,
           remark: formData.remarks?.[0]?.text || `Shipment details updated by Operations Admin.`,
         }),
       }).catch((err) => console.warn('DB patch warning:', err))
@@ -186,6 +197,8 @@ export default function AdminEditEverythingShipmentPage() {
       setTimeout(() => setSavedSuccess(false), 3500)
     } catch (err) {
       console.error('Failed to save shipment:', err)
+    } finally {
+      setIsSaving(false)
     }
   }
 
@@ -284,8 +297,16 @@ export default function AdminEditEverythingShipmentPage() {
               <ExternalLink className="w-3.5 h-3.5 mr-1" /> View Tracking
             </Link>
           </Button>
-          <Button onClick={() => handleSave()} className="bg-[#6B2737] hover:bg-[#521b28] text-white font-bold text-xs">
-            <Save className="w-4 h-4 mr-1.5" /> Save All Changes
+          <Button
+            onClick={() => handleSave()}
+            disabled={isSaving}
+            className="bg-[#6B2737] hover:bg-[#521b28] text-white font-bold text-xs"
+          >
+            {isSaving ? (
+              <><RefreshCw className="w-4 h-4 mr-1.5 animate-spin" /> Saving Changes...</>
+            ) : (
+              <><Save className="w-4 h-4 mr-1.5" /> Save All Changes</>
+            )}
           </Button>
         </div>
       </div>
@@ -826,8 +847,16 @@ export default function AdminEditEverythingShipmentPage() {
           >
             Back to Shipments List
           </Button>
-          <Button type="submit" className="bg-[#6B2737] hover:bg-[#521b28] text-white font-bold px-8 h-11 text-xs">
-            <Save className="w-4 h-4 mr-2" /> Save All Changes
+          <Button
+            type="submit"
+            disabled={isSaving}
+            className="bg-[#6B2737] hover:bg-[#521b28] text-white font-bold px-8 h-11 text-xs"
+          >
+            {isSaving ? (
+              <><RefreshCw className="w-4 h-4 mr-2 animate-spin" /> Saving Changes...</>
+            ) : (
+              <><Save className="w-4 h-4 mr-2" /> Save All Changes</>
+            )}
           </Button>
         </div>
       </form>

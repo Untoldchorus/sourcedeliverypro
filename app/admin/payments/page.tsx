@@ -119,8 +119,17 @@ export default function AdminPaymentsPage() {
       console.warn('DB patch failed for approval:', err)
     }
 
-    // Reload local state
-    loadData()
+    // Immediate in-memory state update
+    setPayments((prev) =>
+      prev.map((item) =>
+        item.id === pay.id || (pay.trackingNumber && item.trackingNumber === pay.trackingNumber)
+          ? { ...item, status: 'LABEL_CREATED', trackingNumber: tracking, receiptGenerated: true, receiptNumber, receipt: generatedReceipt }
+          : item
+      )
+    )
+
+    // Reload unified data
+    await loadData()
     setProcessingId(null)
 
     // Show receipt modal automatically upon approval
@@ -138,6 +147,15 @@ export default function AdminPaymentsPage() {
     }
     saveLocalShipment(updated)
 
+    // Immediate in-memory state update
+    setPayments((prev) =>
+      prev.map((item) =>
+        item.id === rejectingPayment.id || (rejectingPayment.trackingNumber && item.trackingNumber === rejectingPayment.trackingNumber)
+          ? { ...item, status: 'PAYMENT_REJECTED', rejectionReason }
+          : item
+      )
+    )
+
     try {
       await fetch('/api/shipments', {
         method: 'PATCH',
@@ -146,6 +164,7 @@ export default function AdminPaymentsPage() {
           id: rejectingPayment.id,
           trackingNumber: rejectingPayment.trackingNumber,
           status: 'PAYMENT_REJECTED',
+          rejectionReason,
           remark: `Payment rejected by Courier Operations: ${rejectionReason || 'Transaction verification unsuccessful.'}`,
         }),
       })
@@ -153,7 +172,7 @@ export default function AdminPaymentsPage() {
       console.warn('DB patch failed for rejection:', err)
     }
 
-    loadData()
+    await loadData()
     setProcessingId(null)
     setRejectingPayment(null)
     setRejectionReason('')

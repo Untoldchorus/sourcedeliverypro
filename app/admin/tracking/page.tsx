@@ -348,7 +348,7 @@ export default function TrackingOverridesPage() {
   }
 
   // Save All Overrides
-  const handleSaveOverrides = (e: React.FormEvent) => {
+  const handleSaveOverrides = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!selected) return
 
@@ -377,6 +377,27 @@ export default function TrackingOverridesPage() {
     }
 
     saveLocalShipment(updatedShipment)
+
+    // Sync to database
+    try {
+      await fetch('/api/shipments', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: selected.id,
+          trackingNumber: selected.trackingNumber,
+          status,
+          currentLocation,
+          mapQuery,
+          showMap,
+          timelineEvents: updatedEvents,
+          remark: `Tracking updated: ${status.replace(/_/g, ' ')} at ${currentLocation}`,
+        }),
+      })
+    } catch (err) {
+      console.warn('Failed to sync overrides to DB:', err)
+    }
+
     loadShipments()
 
     setSaved(true)
