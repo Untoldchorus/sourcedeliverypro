@@ -76,16 +76,19 @@ export async function POST(request: NextRequest) {
     if (userId) {
       creatorUser = await db.user.findFirst({
         where: { OR: [{ id: userId }, { email: userId.toLowerCase() }] },
+        include: { customer: true },
       }).catch(() => null)
     }
     if (!creatorUser && userEmail) {
       creatorUser = await db.user.findFirst({
         where: { email: userEmail },
+        include: { customer: true },
       }).catch(() => null)
     }
     if (!creatorUser && userName) {
       creatorUser = await db.user.findFirst({
         where: { name: { equals: userName, mode: 'insensitive' } },
+        include: { customer: true },
       }).catch(() => null)
     }
 
@@ -105,6 +108,7 @@ export async function POST(request: NextRequest) {
           status: shipmentStatus as any,
           serviceType: serviceType as any,
           createdById: creatorUser?.id || undefined,
+          customerId: creatorUser?.customer?.id || undefined,
 
           // Sender
           senderName,
@@ -423,8 +427,15 @@ export async function GET(request: NextRequest) {
         customer: {
           select: {
             id: true,
-            fullName: true,
-            email: true,
+            customerNumber: true,
+            companyName: true,
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+              },
+            },
           },
         },
       },
@@ -438,8 +449,8 @@ export async function GET(request: NextRequest) {
       )
       const isAwaitingVerification = s.status === 'PROCESSING' || (s.status === 'PENDING_PAYMENT' && hasPaymentTx)
 
-      const creatorName = s.createdBy?.name || s.customer?.fullName || s.senderName || 'Customer'
-      const creatorEmail = s.createdBy?.email || s.customer?.email || s.senderEmail || ''
+      const creatorName = s.createdBy?.name || s.customer?.user?.name || s.customer?.companyName || s.senderName || 'Customer'
+      const creatorEmail = s.createdBy?.email || s.customer?.user?.email || s.senderEmail || ''
       const creatorRole = s.createdBy?.role || 'CUSTOMER'
 
       return {
@@ -467,11 +478,13 @@ export async function GET(request: NextRequest) {
       success: true,
       data,
     })
-  } catch (error) {
+  } catch (error: any) {
+    console.error('Shipments GET API error:', error)
     return NextResponse.json({
-      success: true,
+      success: false,
+      error: error?.message || 'Failed to fetch shipments',
       data: [],
-    })
+    }, { status: 500 })
   }
 }
 

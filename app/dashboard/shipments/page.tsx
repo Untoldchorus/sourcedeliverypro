@@ -8,7 +8,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { deleteLocalShipment, addDeletedShipment, getDeletedShipments, getLocalShipments } from '@/lib/payments/manualOptions'
+import { deleteLocalShipment, getUnifiedShipments } from '@/lib/payments/manualOptions'
 import { useSession } from 'next-auth/react'
 
 interface Shipment {
@@ -49,102 +49,18 @@ export default function MyShipmentsPage() {
 
     async function loadAllShipments() {
       try {
-        const localList = getLocalShipments()
-        const deleted = getDeletedShipments()
+        const unified = await getUnifiedShipments()
 
-        // 1. Fetch from database API
-        let apiList: any[] = []
-        try {
-          const res = await fetch('/api/shipments')
-          const json = await res.json()
-          if (json.success && Array.isArray(json.data)) {
-            apiList = json.data
-          }
-        } catch {}
-
-        // 2. Combine and deduplicate
-        const map = new Map<string, any>()
-
-        // Put DB items first
-        apiList.forEach((dbItem: any) => {
-          const key = dbItem.trackingNumber || dbItem.id
-          if (key) {
-            map.set(key, {
-              id: dbItem.id,
-              trackingNumber: dbItem.trackingNumber || 'Pending Approval',
-              sender: dbItem.senderName || '',
-              senderName: dbItem.senderName || '',
-              senderEmail: dbItem.senderEmail || '',
-              recipient: dbItem.recipientName || '',
-              recipientName: dbItem.recipientName || '',
-              recipientEmail: dbItem.recipientEmail || '',
-              senderCity: dbItem.senderCity || '',
-              recipientCity: dbItem.recipientCity || '',
-              service: dbItem.serviceType || 'Standard',
-              status: dbItem.displayStatus || (dbItem.status === 'PROCESSING' ? 'PAYMENT_SUBMITTED' : (dbItem.status || 'PENDING_PAYMENT')),
-              created: dbItem.createdAt ? new Date(dbItem.createdAt).toLocaleDateString() : '',
-              estimated: '3-5 Days',
-              weight: `${Number(dbItem.weight) || 3.5} kg`,
-              amount: Number(dbItem.totalAmount) || 0,
-              userId: dbItem.customerId || '',
-              userEmail: dbItem.senderEmail || '',
-            })
-          }
-        })
-
-        // Overlay local items
-        localList.forEach((localItem: any) => {
-          const key = localItem.trackingNumber || localItem.id
-          if (key) {
-            const existing = map.get(key) || {}
-            map.set(key, {
-              ...existing,
-              ...localItem,
-              id: localItem.id || key,
-              trackingNumber: localItem.trackingNumber || existing.trackingNumber || 'Pending Approval',
-              sender: localItem.sender || localItem.senderName || existing.sender || '',
-              senderName: localItem.senderName || existing.senderName || '',
-              senderEmail: localItem.senderEmail || existing.senderEmail || '',
-              recipient: localItem.recipient || localItem.recipientName || existing.recipient || '',
-              recipientName: localItem.recipientName || existing.recipientName || '',
-              recipientEmail: localItem.recipientEmail || existing.recipientEmail || '',
-              senderCity: localItem.senderCity || existing.senderCity || '',
-              recipientCity: localItem.recipientCity || existing.recipientCity || '',
-              service: localItem.serviceType || localItem.service || existing.service || 'Standard',
-              status: localItem.status || existing.status || 'PENDING_PAYMENT',
-              created: localItem.created || existing.created || '',
-              estimated: localItem.estimated || localItem.estimatedDelivery || existing.estimated || '3-5 Days',
-              weight: localItem.weight ? (localItem.weight.toString().includes('kg') ? localItem.weight : `${localItem.weight} kg`) : existing.weight || '3.5 kg',
-              amount: (localItem.totalAmount || localItem.amount) ? parseFloat(localItem.totalAmount || localItem.amount) : existing.amount || 0,
-              userId: localItem.userId || existing.userId || '',
-              userEmail: localItem.userEmail || localItem.senderEmail || existing.userEmail || '',
-              isLocal: true,
-            })
-          }
-        })
-
-        const combined = Array.from(map.values())
-
-        // 3. Filter out deleted items and seed items
-        const active = combined.filter((s: any) => {
-          const sId = (s.id || '').toLowerCase()
-          const sTrk = (s.trackingNumber || '').toLowerCase()
-          if (deleted.includes(sId) || deleted.includes(sTrk)) return false
-          // Never show seed shipments in customer portal
-          if (sTrk === 'sdp8f4k92lm381' || sTrk === 'sdp993c104kl22' || sTrk === 'sdp77b219kp440') return false
-          return true
-        })
-
-        // 4. Filter by customer ownership, ensuring shipments created in this session are shown
-        const userShipments = active.filter((s: any) => {
-          const sEmail = (s.senderEmail || s.userEmail || '').toLowerCase()
+        // Filter by customer ownership, ensuring shipments created in this session are shown
+        const userShipments = unified.filter((s: any) => {
+          const sEmail = (s.senderEmail || s.userEmail || s.createdBy?.email || '').toLowerCase()
           const rEmail = (s.recipientEmail || '').toLowerCase()
-          const sName = (s.senderName || s.sender || '').toLowerCase()
-          const sUser = (s.userId || '').toLowerCase()
+          const sName = (s.senderName || s.sender || s.userName || s.createdBy?.name || '').toLowerCase()
+          const sUser = (s.userId || s.createdById || s.createdBy?.id || '').toLowerCase()
 
-          if (userEmail && (sEmail === userEmail || rEmail === userEmail)) return true
-          if (userName && sName.includes(userName)) return true
-          if (session?.user?.id && sUser === session.user.id.toLowerCase()) return true
+          if (userEmail && (sEmail === userEmail || rEmail === userEmail || sEmail.includes(userEmail))) return true
+          if (userName && (sName.includes(userName) || userName.includes(sName))) return true
+          if (session?.user?.id && (sUser === session.user.id.toLowerCase() || s.createdBy?.id === session.user.id)) return true
           
           // If created in this browser session, show it to the user
           if (s.isLocal) return true

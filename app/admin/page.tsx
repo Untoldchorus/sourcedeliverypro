@@ -46,15 +46,22 @@ export default async function AdminDashboardPage() {
         customer: {
           select: {
             id: true,
-            fullName: true,
-            email: true,
+            customerNumber: true,
+            companyName: true,
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+              },
+            },
           },
         },
         payment: true,
       },
     })
   } catch (e) {
-    // Graceful fallback
+    console.error('AdminDashboardPage db.shipment.findMany error:', e)
   }
 
   return (
@@ -148,8 +155,8 @@ export default async function AdminDashboardPage() {
                 </thead>
                 <tbody className="divide-y divide-slate-700/50">
                   {recentShipments.map((s) => {
-                    const creatorName = s.createdBy?.name || s.customer?.fullName || s.senderName || 'Customer'
-                    const creatorEmail = s.createdBy?.email || s.customer?.email || s.senderEmail || ''
+                    const creatorName = s.createdBy?.name || s.customer?.user?.name || s.customer?.companyName || s.senderName || 'Customer'
+                    const creatorEmail = s.createdBy?.email || s.customer?.user?.email || s.senderEmail || ''
                     const isAwaitingVerification = s.status === 'PROCESSING' || s.payment?.status === 'PROCESSING'
 
                     return (
