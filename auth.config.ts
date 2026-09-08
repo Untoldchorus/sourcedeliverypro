@@ -88,8 +88,13 @@ export const authConfig: NextAuthConfig = {
       // Check if destination is allowed domain
       try {
         const parsed = new URL(url)
+        const appUrlHost = process.env.NEXT_PUBLIC_APP_URL
+          ? new URL(process.env.NEXT_PUBLIC_APP_URL).hostname
+          : ''
         if (
           parsed.origin === baseUrl ||
+          (appUrlHost && parsed.hostname === appUrlHost) ||
+          parsed.hostname.includes('sourcedeliverypro.com') ||
           parsed.hostname.includes('sourcedeliverypro.vercel.app') ||
           parsed.hostname.includes('vercel.app') ||
           parsed.hostname === 'localhost' ||

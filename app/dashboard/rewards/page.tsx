@@ -12,7 +12,11 @@ export default function RewardsPage() {
   const rawName = session?.user?.name || 'MEMBER'
   const cleanCode = rawName.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8) || 'USER'
   const referralCode = `SDP-${cleanCode}-${new Date().getFullYear()}`
-  const referralUrl = typeof window !== 'undefined' ? `${window.location.origin}/register?ref=${referralCode}` : `https://sourcedeliverypro.vercel.app/register?ref=${referralCode}`
+  const baseUrl =
+    typeof window !== 'undefined'
+      ? window.location.origin
+      : (process.env.NEXT_PUBLIC_APP_URL || 'https://sourcedeliverypro.com')
+  const referralUrl = `${baseUrl}/register?ref=${referralCode}`
 
   const handleCopy = () => {
     navigator.clipboard.writeText(referralUrl)
