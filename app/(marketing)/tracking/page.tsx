@@ -18,7 +18,7 @@ import {
   ShieldCheck,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { getLocalShipments } from '@/lib/payments/manualOptions'
+import { getLocalShipments, getDeletedShipments, deleteLocalShipment } from '@/lib/payments/manualOptions'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -179,58 +179,46 @@ function TrackingContent() {
     setData(null)
     setMapLoaded(false)
 
+    // 1. Immediately reject if marked as deleted in local storage blacklist
+    const deletedList = getDeletedShipments().map((d) => d.toUpperCase().trim())
+    if (deletedList.includes(trimmed)) {
+      setLoading(false)
+      setError(`No shipment found for tracking number "${trimmed}".`)
+      return
+    }
+
     try {
       const res = await fetch(`/api/tracking/${encodeURIComponent(trimmed)}`)
       const json = await res.json()
 
       if (json.success && json.data) {
+        const returnedTrk = (json.data.trackingNumber || '').toUpperCase().trim()
+        const returnedId = (json.data.id || '').toUpperCase().trim()
+        if (deletedList.includes(returnedTrk) || (returnedId && deletedList.includes(returnedId))) {
+          setError(`No shipment found for tracking number "${trimmed}".`)
+          setData(null)
+          return
+        }
         setData(mergeAdminOverride(json.data as TrackingData))
       } else {
-        // Check locally saved user/admin shipments if not yet committed to DB
-        const localShipments = getLocalShipments()
-        const localFound = localShipments.find(
-          (s: any) => (s.trackingNumber || s.id || '').toUpperCase() === trimmed
+        // The server definitively says shipment was not found or has been deleted
+        // Purge any local storage ghost entry for this tracking number
+        deleteLocalShipment(trimmed)
+        setError(
+          json.error?.message ||
+            `No shipment found for tracking number "${trimmed}". Please double-check the number and try again.`
         )
-        if (localFound) {
-          setData({
-            trackingNumber: localFound.trackingNumber || localFound.id,
-            status: localFound.status || 'PENDING_PAYMENT',
-            serviceType: localFound.serviceType || localFound.service || 'INTERNATIONAL_EXPRESS',
-            originCity: localFound.senderCity || localFound.origin || 'Origin Facility',
-            originCountry: 'US',
-            destinationCity: localFound.recipientCity || localFound.destination || 'Destination Hub',
-            destinationCountry: 'Global',
-            weight: Number(localFound.weight) || 3.5,
-            packageCount: 1,
-            estimatedDelivery: localFound.estimatedDelivery || 'In Transit',
-            currentLocation: localFound.currentLocation || localFound.senderCity || 'Processing Hub',
-            mapQuery: localFound.mapQuery || undefined,
-            showMap: localFound.showMap !== undefined ? Boolean(localFound.showMap) : true,
-            remarks: Array.isArray(localFound.remarks) ? localFound.remarks : [],
-            events: localFound.events && localFound.events.length > 0
-              ? localFound.events
-              : [
-                  {
-                    id: 'evt-local-1',
-                    status: localFound.status || 'PENDING_PAYMENT',
-                    description: localFound.status === 'LABEL_CREATED'
-                      ? 'Shipping label generated and cargo manifest processed.'
-                      : `Consignment registered. Status: ${localFound.status || 'Pending'}`,
-                    location: localFound.currentLocation || localFound.senderCity || 'Origin Facility',
-                    timestamp: localFound.created || new Date().toISOString(),
-                  },
-                ],
-            hasProofOfDelivery: false,
-            proofOfDelivery: null,
-          })
-        } else {
-          setError(json.error?.message || `No shipment found for tracking number "${trimmed}". Please double-check the number and try again.`)
-        }
       }
     } catch {
+      // In case of network failure (offline):
+      if (deletedList.includes(trimmed)) {
+        setError(`No shipment found for tracking number "${trimmed}".`)
+        return
+      }
+
       const localShipments = getLocalShipments()
       const localFound = localShipments.find(
-        (s: any) => (s.trackingNumber || s.id || '').toUpperCase() === trimmed
+        (s: any) => (s.trackingNumber || s.id || '').toUpperCase().trim() === trimmed
       )
       if (localFound) {
         setData({

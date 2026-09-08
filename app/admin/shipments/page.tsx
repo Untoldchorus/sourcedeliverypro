@@ -553,14 +553,28 @@ export default function AdminShipmentsPage() {
                           if (confirm(`Permanently delete shipment ${s.trackingNumber || s.id}?`)) {
                             const id = s.id
                             const trk = s.trackingNumber
-                            deleteLocalShipment(id)
-                            if (trk) deleteLocalShipment(trk)
-                            addDeletedShipment(id)
-                            if (trk) addDeletedShipment(trk)
+                            const shpNum = s.shipmentNumber
+                            if (id) {
+                              deleteLocalShipment(id)
+                              addDeletedShipment(id)
+                            }
+                            if (trk) {
+                              deleteLocalShipment(trk)
+                              addDeletedShipment(trk)
+                            }
+                            if (shpNum) {
+                              deleteLocalShipment(shpNum)
+                              addDeletedShipment(shpNum)
+                            }
                             try {
-                              await fetch(`/api/shipments?id=${encodeURIComponent(id || trk)}`, { method: 'DELETE' })
+                              await fetch(
+                                `/api/shipments?id=${encodeURIComponent(id || '')}&trackingNumber=${encodeURIComponent(trk || '')}`,
+                                { method: 'DELETE' }
+                              )
                             } catch {}
-                            setShipments((prev) => prev.filter((item) => item.id !== id && item.trackingNumber !== trk))
+                            setShipments((prev) =>
+                              prev.filter((item) => item.id !== id && item.trackingNumber !== trk && item.shipmentNumber !== shpNum)
+                            )
                           }
                         }}
                         className="text-slate-400 hover:text-red-400 hover:bg-red-500/10 text-xs p-2"

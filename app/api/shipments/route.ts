@@ -316,92 +316,6 @@ async function ensureShipmentsSynced() {
         }).catch(() => null)
       }
     }
-
-    // 3. Ensure SDPF9KSEMS72VG exists in Supabase
-    const sdpf = await db.shipment.findFirst({
-      where: { trackingNumber: 'SDPF9KSEMS72VG' },
-    }).catch(() => null)
-
-    if (!sdpf) {
-      await db.$transaction(async (tx) => {
-        const shipment = await tx.shipment.create({
-          data: {
-            shipmentNumber: 'SHP-111-SDPF9KSEMS72VG',
-            trackingNumber: 'SDPF9KSEMS72VG',
-            status: 'PROCESSING',
-            serviceType: 'STANDARD',
-            createdById: dminUser?.id || undefined,
-            senderName: '111',
-            senderEmail: dminUser?.email || 'dmin@sourcedeliverypro.com',
-            senderPhone: '+1 555-0111',
-            senderAddressLine1: '111 Origin Street',
-            senderCity: '111',
-            senderCountry: 'US',
-            senderCompany: dminUser ? `User: ${dminUser.name} (${dminUser.email})` : 'User: dmin',
-            recipientName: '111',
-            recipientEmail: 'recipient111@example.com',
-            recipientPhone: '+1 555-0211',
-            recipientAddressLine1: '111 Destination Blvd',
-            recipientCity: '111',
-            recipientCountry: 'GB',
-            weight: 3.5,
-            packageCount: 1,
-            packageType: 'PARCEL',
-            contents: 'General Logistics Cargo',
-            declaredValue: 120,
-            baseRate: 50,
-            fuelSurcharge: 10,
-            taxAmount: 5,
-            totalAmount: 65,
-            currency: 'USD',
-            specialInstructions: dminUser ? `Booked by user ${dminUser.name} (${dminUser.email})` : 'Booked by dmin',
-            estimatedDelivery: new Date(Date.now() + 4 * 86400000),
-          },
-        })
-
-        await tx.trackingEvent.create({
-          data: {
-            shipmentId: shipment.id,
-            status: 'PROCESSING',
-            description: 'Shipment registered by user dmin. Payment proof submitted, awaiting confirmation.',
-            city: '111',
-            country: 'US',
-          },
-        })
-
-        const payment = await tx.payment.create({
-          data: {
-            paymentReference: 'TXN-111-SDPF9KSEMS72VG',
-            shipmentId: shipment.id,
-            amount: 65,
-            currency: 'USD',
-            status: 'PROCESSING',
-            provider: 'MANUAL',
-            metadata: {
-              paymentTxId: 'TXN-111',
-              paymentMethod: 'Manual Transfer',
-              paymentPayer: dminUser?.name || 'dmin',
-              submittedAt: new Date().toISOString(),
-            },
-          },
-        })
-
-        await tx.invoice.create({
-          data: {
-            invoiceNumber: 'INV-2026-11101',
-            shipmentId: shipment.id,
-            paymentId: payment.id,
-            subtotal: 60,
-            taxAmount: 5,
-            totalAmount: 65,
-            currency: 'USD',
-            status: 'PENDING',
-          },
-        })
-      }).catch((e) => {
-        console.error('Error auto-creating SDPF9KSEMS72VG:', e)
-      })
-    }
   } catch (err) {
     console.error('ensureShipmentsSynced error:', err)
   }
@@ -518,7 +432,10 @@ export async function GET(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
-    const idOrTracking = searchParams.get('id') || searchParams.get('trackingNumber')
+    const idParam = searchParams.get('id')?.trim()
+    const trkParam = searchParams.get('trackingNumber')?.trim()
+    const idOrTracking = idParam || trkParam
+
     if (!idOrTracking) {
       return NextResponse.json(
         { success: false, error: { message: 'Missing shipment id or tracking number' } },
@@ -526,26 +443,31 @@ export async function DELETE(request: NextRequest) {
       )
     }
 
-    const clean = idOrTracking.trim()
-    const shipment = await db.shipment.findFirst({
-      where: {
-        OR: [
-          { id: clean },
-          { trackingNumber: clean },
-          { shipmentNumber: clean },
-        ],
-      },
-    }).catch(() => null)
+    const orConditions: any[] = []
+    if (idParam) {
+      orConditions.push({ id: idParam })
+      orConditions.push({ shipmentNumber: { equals: idParam, mode: 'insensitive' } })
+      orConditions.push({ trackingNumber: { equals: idParam, mode: 'insensitive' } })
+    }
+    if (trkParam) {
+      orConditions.push({ trackingNumber: { equals: trkParam, mode: 'insensitive' } })
+      orConditions.push({ shipmentNumber: { equals: trkParam, mode: 'insensitive' } })
+      orConditions.push({ id: trkParam })
+    }
 
-    if (shipment) {
+    const shipments = await db.shipment.findMany({
+      where: { OR: orConditions },
+    }).catch(() => [])
+
+    for (const shipment of shipments) {
       await db.$transaction(async (tx) => {
         await tx.trackingEvent.deleteMany({ where: { shipmentId: shipment.id } }).catch(() => null)
         await tx.payment.deleteMany({ where: { shipmentId: shipment.id } }).catch(() => null)
         await tx.invoice.deleteMany({ where: { shipmentId: shipment.id } }).catch(() => null)
         await tx.proofOfDelivery.deleteMany({ where: { shipmentId: shipment.id } }).catch(() => null)
         await tx.shipmentException.deleteMany({ where: { shipmentId: shipment.id } }).catch(() => null)
-        await tx.shipment.delete({ where: { id: shipment.id } })
-      })
+        await tx.shipment.delete({ where: { id: shipment.id } }).catch(() => null)
+      }).catch(() => null)
     }
 
     return NextResponse.json({ success: true, message: 'Shipment deleted successfully' })

@@ -246,14 +246,28 @@ export default function MyShipmentsPage() {
                         if (confirm(`Are you sure you want to delete / cancel shipment ${s.trackingNumber || s.id}?`)) {
                           const id = s.id
                           const trk = s.trackingNumber
-                          deleteLocalShipment(id)
-                          if (trk) deleteLocalShipment(trk)
-                          addDeletedShipment(id)
-                          if (trk) addDeletedShipment(trk)
+                          const shpNum = s.shipmentNumber
+                          if (id) {
+                            deleteLocalShipment(id)
+                            addDeletedShipment(id)
+                          }
+                          if (trk) {
+                            deleteLocalShipment(trk)
+                            addDeletedShipment(trk)
+                          }
+                          if (shpNum) {
+                            deleteLocalShipment(shpNum)
+                            addDeletedShipment(shpNum)
+                          }
                           try {
-                            await fetch(`/api/shipments?id=${encodeURIComponent(id || trk)}`, { method: 'DELETE' })
+                            await fetch(
+                              `/api/shipments?id=${encodeURIComponent(id || '')}&trackingNumber=${encodeURIComponent(trk || '')}`,
+                              { method: 'DELETE' }
+                            )
                           } catch {}
-                          setShipments((prev) => prev.filter((item) => item.id !== id && item.trackingNumber !== trk))
+                          setShipments((prev) =>
+                            prev.filter((item) => item.id !== id && item.trackingNumber !== trk && item.shipmentNumber !== shpNum)
+                          )
                         }
                       }}
                       className="text-xs text-slate-400 hover:text-red-500 hover:bg-red-50"

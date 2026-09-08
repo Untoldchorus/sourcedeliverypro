@@ -88,8 +88,12 @@ export const MANUAL_PAYMENT_METHODS: ManualPaymentMethod[] = [
 export function getDeletedShipments(): string[] {
   if (typeof window === 'undefined') return []
   try {
-    const raw = localStorage.getItem('sourcedeliverypro_deleted_shipments')
-    return raw ? JSON.parse(raw) : []
+    const raw1 = localStorage.getItem('sourcedeliverypro_deleted_shipments')
+    const raw2 = localStorage.getItem('swiftship_deleted_shipments')
+    const list1: string[] = raw1 ? JSON.parse(raw1) : []
+    const list2: string[] = raw2 ? JSON.parse(raw2) : []
+    const combined = Array.from(new Set([...list1, ...list2])).map((s) => s.toLowerCase().trim())
+    return combined
   } catch {
     return []
   }
@@ -99,10 +103,11 @@ export function addDeletedShipment(idOrTracking: string) {
   if (typeof window === 'undefined' || !idOrTracking) return
   try {
     const deleted = getDeletedShipments()
-    const target = idOrTracking.toLowerCase()
+    const target = idOrTracking.toLowerCase().trim()
     if (!deleted.includes(target)) {
       deleted.push(target)
       localStorage.setItem('sourcedeliverypro_deleted_shipments', JSON.stringify(deleted))
+      localStorage.setItem('swiftship_deleted_shipments', JSON.stringify(deleted))
     }
   } catch (err) {
     console.error('Failed to record deleted shipment', err)
@@ -123,11 +128,12 @@ export function getLocalShipments(): any[] {
     const deduplicated: any[] = []
     for (const item of rawList) {
       if (!item) continue
-      const sId = (item.id || '').toLowerCase()
-      const sTrk = (item.trackingNumber || '').toLowerCase()
-      if (deleted.includes(sId) || deleted.includes(sTrk)) continue
+      const sId = (item.id || '').toLowerCase().trim()
+      const sTrk = (item.trackingNumber || '').toLowerCase().trim()
+      const sAwb = (item.awb || '').toLowerCase().trim()
+      if (deleted.includes(sId) || deleted.includes(sTrk) || (sAwb && deleted.includes(sAwb))) continue
 
-      const key = item.trackingNumber || item.id
+      const key = item.trackingNumber || item.id || item.awb
       if (key && !seen.has(key)) {
         seen.add(key)
         if (item.id && item.id !== key) seen.add(item.id)
@@ -170,21 +176,41 @@ export function saveLocalShipment(shipment: any) {
 export function deleteLocalShipment(idOrTracking: string) {
   if (typeof window === 'undefined' || !idOrTracking) return
   try {
-    const target = idOrTracking.toLowerCase()
+    const target = idOrTracking.toLowerCase().trim()
     addDeletedShipment(idOrTracking)
-    const existing = getLocalShipments().filter((s) => {
-      const sId = (s.id || '').toLowerCase()
-      const sTrk = (s.trackingNumber || '').toLowerCase()
-      return sId !== target && sTrk !== target
-    })
 
-    const map: Record<string, any> = {}
-    existing.forEach((item) => {
-      const primaryKey = item.trackingNumber || item.id
-      if (primaryKey) map[primaryKey] = item
-    })
-    localStorage.setItem('sourcedeliverypro_admin_shipments', JSON.stringify(map))
-    localStorage.setItem('swiftship_admin_shipments', JSON.stringify(map))
+    const purgeStorage = (storageKey: string) => {
+      const raw = localStorage.getItem(storageKey)
+      if (!raw) return
+      try {
+        const parsed = JSON.parse(raw)
+        if (Array.isArray(parsed)) {
+          const filtered = parsed.filter((s: any) => {
+            const sId = (s?.id || '').toLowerCase().trim()
+            const sTrk = (s?.trackingNumber || '').toLowerCase().trim()
+            const sAwb = (s?.awb || '').toLowerCase().trim()
+            return sId !== target && sTrk !== target && sAwb !== target
+          })
+          localStorage.setItem(storageKey, JSON.stringify(filtered))
+        } else if (typeof parsed === 'object' && parsed !== null) {
+          const newMap: Record<string, any> = {}
+          for (const [k, v] of Object.entries(parsed)) {
+            const kLower = k.toLowerCase().trim()
+            const vObj: any = v
+            const sId = (vObj?.id || '').toLowerCase().trim()
+            const sTrk = (vObj?.trackingNumber || '').toLowerCase().trim()
+            const sAwb = (vObj?.awb || '').toLowerCase().trim()
+            if (kLower !== target && sId !== target && sTrk !== target && sAwb !== target) {
+              newMap[k] = v
+            }
+          }
+          localStorage.setItem(storageKey, JSON.stringify(newMap))
+        }
+      } catch {}
+    }
+
+    purgeStorage('sourcedeliverypro_admin_shipments')
+    purgeStorage('swiftship_admin_shipments')
   } catch (err) {
     console.error('Failed to delete shipment from localStorage', err)
   }

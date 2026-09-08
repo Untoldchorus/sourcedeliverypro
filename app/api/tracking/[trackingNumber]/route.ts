@@ -103,38 +103,15 @@ export async function GET(
     })
   } catch (error) {
     console.error('Tracking API error:', error)
-
-    const { trackingNumber: reqNumber } = await params
-      const cleanNumber = (reqNumber || 'SDP8F4K92LM381').trim().toUpperCase()
-
-      return NextResponse.json({
-        success: true,
-        data: {
-          trackingNumber: cleanNumber,
-          status: 'IN_TRANSIT',
-          serviceType: 'INTERNATIONAL_EXPRESS',
-          originCity: 'New York',
-          originCountry: 'United States',
-          destinationCity: 'London',
-          destinationCountry: 'United Kingdom',
-          weight: 3.5,
-          packageCount: 1,
-          estimatedDelivery: new Date(Date.now() + 2 * 86400000).toISOString(),
-          actualDelivery: null,
-          events: [
-            {
-              id: 'evt-1',
-              status: 'IN_TRANSIT',
-              description: 'In transit to destination distribution hub',
-              facilityName: 'London Heathrow Gateway Hub',
-              city: 'London',
-              country: 'United Kingdom',
-              timestamp: new Date().toISOString(),
-            },
-          ],
-          hasProofOfDelivery: false,
-          proofOfDelivery: null,
+    return NextResponse.json(
+      {
+        success: false,
+        error: {
+          code: 'SHIPMENT_NOT_FOUND',
+          message: 'Tracking information could not be found or retrieved at this time',
         },
-      })
+      },
+      { status: 404 }
+    )
   }
 }
