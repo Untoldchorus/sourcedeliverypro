@@ -370,23 +370,42 @@ export async function getUnifiedShipments(): Promise<any[]> {
           weight: `${Number(dbItem.weight) || 3.5} kg`,
           amount: Number(dbItem.totalAmount) || 0,
           totalAmount: Number(dbItem.totalAmount) || 0,
-          userId: dbItem.customerId || '',
-          userEmail: dbItem.senderEmail || '',
+          userId: dbItem.customerId || dbItem.createdById || dbItem.userId || '',
+          userEmail: dbItem.userEmail || dbItem.createdBy?.email || dbItem.senderEmail || '',
+          userName: dbItem.userName || dbItem.createdBy?.name || dbItem.senderName || 'Customer',
+          userRole: dbItem.userRole || dbItem.createdBy?.role || 'CUSTOMER',
+          createdBy: dbItem.createdBy,
           isLocal: false,
         })
       }
     })
 
-    // Overlay local items
+    // Overlay local items with strict deduplication
     localList.forEach((localItem: any) => {
-      const key = localItem.trackingNumber || localItem.id
+      const trk = (localItem.trackingNumber || '').toUpperCase().trim()
+      const sid = (localItem.id || '').toUpperCase().trim()
+
+      let existingKey = ''
+      if (trk && map.has(trk)) existingKey = trk
+      else if (sid && map.has(sid)) existingKey = sid
+      else {
+        for (const [k, v] of map.entries()) {
+          if ((trk && v.trackingNumber && v.trackingNumber.toUpperCase().trim() === trk) ||
+              (sid && v.id && v.id.toUpperCase().trim() === sid)) {
+            existingKey = k
+            break
+          }
+        }
+      }
+
+      const key = existingKey || trk || sid
       if (key) {
         const existing = map.get(key) || {}
         map.set(key, {
           ...existing,
           ...localItem,
-          id: localItem.id || key,
-          trackingNumber: localItem.trackingNumber || existing.trackingNumber || 'Pending Confirmation',
+          id: existing.id || localItem.id || key,
+          trackingNumber: existing.trackingNumber || localItem.trackingNumber || 'Pending Confirmation',
           sender: localItem.sender || localItem.senderName || existing.sender || '',
           senderName: localItem.senderName || existing.senderName || '',
           senderEmail: localItem.senderEmail || existing.senderEmail || '',
@@ -408,6 +427,9 @@ export async function getUnifiedShipments(): Promise<any[]> {
           totalAmount: (localItem.totalAmount || localItem.amount) ? parseFloat(localItem.totalAmount || localItem.amount) : existing.totalAmount || 0,
           userId: localItem.userId || existing.userId || '',
           userEmail: localItem.userEmail || localItem.senderEmail || existing.userEmail || '',
+          userName: localItem.userName || localItem.senderName || existing.userName || 'Customer',
+          userRole: localItem.userRole || existing.userRole || 'CUSTOMER',
+          createdBy: existing.createdBy || localItem.createdBy,
           isLocal: true,
         })
       }

@@ -17,7 +17,8 @@ import {
   Copy,
   Check,
   Printer,
-  ExternalLink
+  ExternalLink,
+  User
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { formatCurrency } from '@/lib/utils'
@@ -314,9 +315,15 @@ export default function AdminPaymentsPage() {
                       <span className="font-bold text-white block">
                         {p.senderName || p.customerName || 'Customer'}
                       </span>
-                      <span className="text-[10px] text-slate-400">
+                      <span className="text-[10px] text-slate-400 block">
                         {p.origin || p.senderCity || 'Origin'} → {p.destination || p.recipientCity || 'Destination'}
                       </span>
+                      {(p.userName || p.userEmail || p.createdBy) && (
+                        <div className="mt-1 flex items-center gap-1 text-[10px] text-sky-400">
+                          <User className="w-3 h-3 shrink-0" />
+                          <span>Booked by: <strong>{p.userName || p.createdBy?.name || 'Customer'}</strong> ({p.userEmail || p.createdBy?.email || p.senderEmail})</span>
+                        </div>
+                      )}
                     </td>
                     <td className="p-3">
                       <span className="text-slate-300 font-medium block">{paymentMethodDisplay}</span>

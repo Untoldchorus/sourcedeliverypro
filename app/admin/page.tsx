@@ -1,11 +1,14 @@
 import Link from 'next/link'
 import {
   Users, Package, DollarSign, Truck, AlertTriangle, ShieldCheck,
-  TrendingUp, BarChart3, Settings, FileText, ArrowRight
+  TrendingUp, BarChart3, Settings, FileText, ArrowRight, User
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { db } from '@/lib/db'
 import { formatCurrency, formatDate } from '@/lib/utils'
+
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
 export default async function AdminDashboardPage() {
   let userCount = 0
@@ -18,7 +21,9 @@ export default async function AdminDashboardPage() {
   try {
     userCount = await db.user.count()
     shipmentCount = await db.shipment.count()
-    pendingPayments = await db.payment.count({ where: { status: 'PENDING' } })
+    pendingPayments = await db.payment.count({
+      where: { status: { in: ['PENDING', 'PROCESSING'] } },
+    })
     activeExceptions = await db.shipmentException.count({ where: { isResolved: false } })
     const paidSum = await db.payment.aggregate({
       where: { status: 'PAID' },
@@ -27,8 +32,26 @@ export default async function AdminDashboardPage() {
     totalRevenue = Number(paidSum._sum.amount || 0)
 
     recentShipments = await db.shipment.findMany({
-      take: 6,
+      take: 50,
       orderBy: { createdAt: 'desc' },
+      include: {
+        createdBy: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true,
+          },
+        },
+        customer: {
+          select: {
+            id: true,
+            fullName: true,
+            email: true,
+          },
+        },
+        payment: true,
+      },
     })
   } catch (e) {
     // Graceful fallback
@@ -72,19 +95,19 @@ export default async function AdminDashboardPage() {
           <div className="bg-slate-800/80 border border-slate-700/80 p-5 rounded-2xl">
             <span className="text-xs font-bold text-slate-400 uppercase">All Consignments</span>
             <div className="text-2xl font-black text-white mt-1">{shipmentCount}</div>
-            <span className="text-[11px] text-slate-500">Domestic & cross-border</span>
+            <span className="text-[11px] text-slate-500">Domestic &amp; cross-border</span>
           </div>
 
           <div className="bg-slate-800/80 border border-slate-700/80 p-5 rounded-2xl">
             <span className="text-xs font-bold text-slate-400 uppercase">Registered Users</span>
             <div className="text-2xl font-black text-[#6B2737] mt-1">{userCount}</div>
-            <span className="text-[11px] text-slate-500">Customers & Staff</span>
+            <span className="text-[11px] text-slate-500">Customers &amp; Staff</span>
           </div>
 
           <div className="bg-slate-800/80 border border-slate-700/80 p-5 rounded-2xl">
-            <span className="text-xs font-bold text-slate-400 uppercase">Pending Invoices</span>
+            <span className="text-xs font-bold text-slate-400 uppercase">Awaiting Confirmation</span>
             <div className="text-2xl font-black text-amber-400 mt-1">{pendingPayments}</div>
-            <span className="text-[11px] text-slate-500">Awaiting customer payment</span>
+            <span className="text-[11px] text-slate-500">Payments awaiting approval</span>
           </div>
 
           <div className="bg-slate-800/80 border border-slate-700/80 p-5 rounded-2xl">
@@ -101,12 +124,12 @@ export default async function AdminDashboardPage() {
               <Package className="w-4 h-4 text-[#6B2737]" />
               Real-Time Global Shipments Feed
             </h2>
-            <span className="text-xs text-slate-400">Telemetry updated continuously</span>
+            <span className="text-xs text-slate-400">Live telemetry updated from database</span>
           </div>
 
           {recentShipments.length === 0 ? (
             <div className="p-12 text-center text-slate-500 text-sm">
-              No shipments currently registered in system database. Run seed script to load sample operational data.
+              No shipments currently registered in system database.
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -114,6 +137,7 @@ export default async function AdminDashboardPage() {
                 <thead className="bg-slate-800 text-slate-400 uppercase font-semibold border-b border-slate-700">
                   <tr>
                     <th className="p-4">Tracking ID</th>
+                    <th className="p-4">Booked By (User)</th>
                     <th className="p-4">Sender Hub</th>
                     <th className="p-4">Destination</th>
                     <th className="p-4">Service</th>
@@ -123,21 +147,56 @@ export default async function AdminDashboardPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-700/50">
-                  {recentShipments.map((s) => (
-                    <tr key={s.id} className="hover:bg-slate-700/30">
-                      <td className="p-4 font-mono font-bold text-[#6B2737]">{s.trackingNumber}</td>
-                      <td className="p-4">{s.senderCity}, {s.senderCountry}</td>
-                      <td className="p-4 font-medium text-white">{s.recipientCity}, {s.recipientCountry}</td>
-                      <td className="p-4">{s.serviceType}</td>
-                      <td className="p-4 font-mono">{s.weight} kg</td>
-                      <td className="p-4">
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-700 text-slate-200">
-                          {s.status}
-                        </span>
-                      </td>
-                      <td className="p-4 font-bold text-emerald-400">{formatCurrency(Number(s.totalAmount))}</td>
-                    </tr>
-                  ))}
+                  {recentShipments.map((s) => {
+                    const creatorName = s.createdBy?.name || s.customer?.fullName || s.senderName || 'Customer'
+                    const creatorEmail = s.createdBy?.email || s.customer?.email || s.senderEmail || ''
+                    const isAwaitingVerification = s.status === 'PROCESSING' || s.payment?.status === 'PROCESSING'
+
+                    return (
+                      <tr key={s.id} className="hover:bg-slate-700/30 transition-colors">
+                        <td className="p-4 font-mono font-bold text-[#FF6B35]">
+                          <Link href={`/admin/shipments/${s.id}`} className="hover:underline">
+                            {s.trackingNumber}
+                          </Link>
+                        </td>
+                        <td className="p-4">
+                          <div className="flex items-center gap-2">
+                            <div className="w-7 h-7 rounded-lg bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-xs font-bold text-sky-400 shrink-0">
+                              {creatorName.charAt(0).toUpperCase()}
+                            </div>
+                            <div>
+                              <span className="font-bold text-white block text-xs">
+                                {creatorName}
+                              </span>
+                              <span className="text-[10px] text-slate-400 block font-mono">
+                                {creatorEmail || 'Verified User'}
+                              </span>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="p-4">{s.senderCity}, {s.senderCountry}</td>
+                        <td className="p-4 font-medium text-white">{s.recipientCity}, {s.recipientCountry}</td>
+                        <td className="p-4">{s.serviceType?.replace(/_/g, ' ')}</td>
+                        <td className="p-4 font-mono">{Number(s.weight)} kg</td>
+                        <td className="p-4">
+                          <span
+                            className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${
+                              isAwaitingVerification
+                                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                                : s.status === 'DELIVERED'
+                                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                                : s.status === 'IN_TRANSIT'
+                                ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                                : 'bg-slate-700 text-slate-200'
+                            }`}
+                          >
+                            {isAwaitingVerification ? 'PAYMENT SUBMITTED' : s.status?.replace(/_/g, ' ')}
+                          </span>
+                        </td>
+                        <td className="p-4 font-bold text-emerald-400">{formatCurrency(Number(s.totalAmount))}</td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>

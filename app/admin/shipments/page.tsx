@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { Box, Search, Edit3, CheckCircle2, Globe, MessageSquare, ExternalLink, MapPin, Trash2 } from 'lucide-react'
+import { Box, Search, Edit3, CheckCircle2, Globe, MessageSquare, ExternalLink, MapPin, Trash2, User } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { formatCurrency } from '@/lib/utils'
 import { getLocalShipments, saveLocalShipment, deleteLocalShipment, getDeletedShipments, addDeletedShipment } from '@/lib/payments/manualOptions'
@@ -109,7 +109,7 @@ export default function AdminShipmentsPage() {
         const sId = s.id.toLowerCase()
         const sTrk = (s.trackingNumber || '').toLowerCase()
         if (!deleted.includes(sId) && !deleted.includes(sTrk)) {
-          map.set(s.id, s)
+          map.set(s.trackingNumber || s.id, s)
         }
       })
 
@@ -119,7 +119,7 @@ export default function AdminShipmentsPage() {
         const json = await res.json()
         if (json.success && Array.isArray(json.data)) {
           json.data.forEach((dbItem: any) => {
-            const key = dbItem.trackingNumber || dbItem.id
+            const key = (dbItem.trackingNumber || dbItem.id || '').toUpperCase().trim()
             const dId = (dbItem.id || '').toLowerCase()
             const dTrk = (dbItem.trackingNumber || '').toLowerCase()
             if (key && !deleted.includes(dId) && !deleted.includes(dTrk)) {
@@ -137,37 +137,60 @@ export default function AdminShipmentsPage() {
                 mapQuery: `${dbItem.senderCity || 'New York'},${dbItem.senderCountry || 'USA'}`,
                 showMap: true,
                 remarks: [],
+                userName: dbItem.userName || dbItem.createdBy?.name || dbItem.senderName,
+                userEmail: dbItem.userEmail || dbItem.createdBy?.email || dbItem.senderEmail,
+                userRole: dbItem.userRole || dbItem.createdBy?.role || 'CUSTOMER',
+                createdBy: dbItem.createdBy,
               })
             }
           })
         }
       } catch {}
 
-      // 3. Overlay or add from local storage (excluding deleted)
+      // 3. Overlay from local storage with strict canonical deduplication
       localList.forEach((s: any) => {
-        const key = s.id || s.trackingNumber
-        const sId = (s.id || '').toLowerCase()
-        const sTrk = (s.trackingNumber || '').toLowerCase()
-        if (key && !deleted.includes(sId) && !deleted.includes(sTrk)) {
-          const existing = map.get(key) || {}
-          map.set(key, {
-            ...existing,
-            ...s,
-            id: key,
-            trackingNumber: s.trackingNumber || existing.trackingNumber || key,
-            sender: s.sender || `${s.senderName || 'Sender'} (${s.senderCity || 'Origin'})`,
-            recipient: s.recipient || `${s.recipientName || 'Recipient'} (${s.recipientCity || 'Destination'})`,
-            service: s.service || s.serviceType || existing.service || 'Express Courier',
-            driver: s.driver || s.assignedDriver || existing.driver || 'Assigned Carrier Driver',
-            facility: s.facility || s.assignedFacility || existing.facility || 'Regional Hub',
-            status: s.status || existing.status || 'PENDING_PAYMENT',
-            amount: Number(s.amount) || Number(s.totalAmount) || existing.amount || 145.5,
-            currentLocation: s.currentLocation || s.location || existing.currentLocation || 'Operations Dispatch',
-            mapQuery: s.mapQuery || existing.mapQuery || '',
-            showMap: s.showMap !== undefined ? Boolean(s.showMap) : existing.showMap !== undefined ? Boolean(existing.showMap) : true,
-            remarks: Array.isArray(s.remarks) ? s.remarks : existing.remarks || [],
-          })
+        const trk = (s.trackingNumber || '').toUpperCase().trim()
+        const sid = (s.id || '').toUpperCase().trim()
+        if ((!trk && !sid) || deleted.includes(sid.toLowerCase()) || deleted.includes(trk.toLowerCase())) {
+          return
         }
+
+        let existingKey = ''
+        if (trk && map.has(trk)) existingKey = trk
+        else if (sid && map.has(sid)) existingKey = sid
+        else {
+          for (const [k, v] of map.entries()) {
+            if ((trk && v.trackingNumber && v.trackingNumber.toUpperCase().trim() === trk) ||
+                (sid && v.id && v.id.toUpperCase().trim() === sid)) {
+              existingKey = k
+              break
+            }
+          }
+        }
+
+        const canonicalKey = existingKey || trk || sid
+        const existing = map.get(canonicalKey) || {}
+        map.set(canonicalKey, {
+          ...existing,
+          ...s,
+          id: existing.id || s.id || canonicalKey,
+          trackingNumber: existing.trackingNumber || s.trackingNumber || canonicalKey,
+          sender: s.sender || `${s.senderName || 'Sender'} (${s.senderCity || 'Origin'})`,
+          recipient: s.recipient || `${s.recipientName || 'Recipient'} (${s.recipientCity || 'Destination'})`,
+          service: s.service || s.serviceType || existing.service || 'Express Courier',
+          driver: s.driver || s.assignedDriver || existing.driver || 'Assigned Carrier Driver',
+          facility: s.facility || s.assignedFacility || existing.facility || 'Regional Hub',
+          status: s.status || existing.status || 'PENDING_PAYMENT',
+          amount: Number(s.amount) || Number(s.totalAmount) || existing.amount || 145.5,
+          currentLocation: s.currentLocation || s.location || existing.currentLocation || 'Operations Dispatch',
+          mapQuery: s.mapQuery || existing.mapQuery || '',
+          showMap: s.showMap !== undefined ? Boolean(s.showMap) : existing.showMap !== undefined ? Boolean(existing.showMap) : true,
+          remarks: Array.isArray(s.remarks) ? s.remarks : existing.remarks || [],
+          userName: s.userName || s.senderName || existing.userName,
+          userEmail: s.userEmail || s.senderEmail || existing.userEmail,
+          userRole: s.userRole || existing.userRole || 'CUSTOMER',
+          createdBy: existing.createdBy || s.createdBy,
+        })
       })
       setShipments(Array.from(map.values()))
     } catch (e) {
@@ -285,7 +308,15 @@ export default function AdminShipmentsPage() {
                     </td>
                     <td className="p-3">
                       <span className="font-bold text-white block">{s.recipient}</span>
-                      <span className="text-[10px] text-slate-400">From: {s.sender}</span>
+                      <span className="text-[10px] text-slate-400 block">From: {s.sender}</span>
+                      {(s.userName || s.userEmail || s.createdBy) && (
+                        <div className="mt-1.5 flex items-center gap-1.5 text-[10px] bg-slate-950 px-2 py-0.5 rounded-md border border-slate-800 text-sky-400 max-w-[220px]">
+                          <User className="w-3 h-3 text-sky-400 shrink-0" />
+                          <span className="text-slate-400">Booked by:</span>
+                          <span className="font-bold text-sky-300 truncate">{s.userName || s.createdBy?.name || 'Customer'}</span>
+                          <span className="text-slate-500 font-mono text-[9px] truncate">({s.userEmail || s.createdBy?.email || s.senderEmail || 'Verified'})</span>
+                        </div>
+                      )}
                     </td>
                     <td className="p-3">
                       <div className="space-y-1">
