@@ -83,6 +83,8 @@ export default function PayPage() {
   const [proofFileSize, setProofFileSize] = useState<string>('')
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
+  const [isRedirecting, setIsRedirecting] = useState(false)
+  const [redirectTracking, setRedirectTracking] = useState('')
 
   useEffect(() => {
     if (!shipmentId) return
@@ -133,10 +135,32 @@ export default function PayPage() {
 
       if (isMounted) {
         if (found) {
+          const targetTracking = (found.trackingNumber || found.id || shipmentId).trim().toUpperCase()
+
+          // Check if payment has been confirmed/paid or submitted
+          const isPending =
+            !found.paid &&
+            !found.receiptGenerated &&
+            found.paymentStatus !== 'APPROVED' &&
+            found.paymentStatus !== 'PAID' &&
+            (found.status === 'PENDING_PAYMENT' || found.status === 'DRAFT' || found.status === 'PAYMENT_FAILED')
+
+          if (!isPending && (found.status || found.paid || found.receiptGenerated || found.paymentStatus)) {
+            setIsRedirecting(true)
+            setRedirectTracking(targetTracking)
+            router.replace(`/tracking?number=${encodeURIComponent(targetTracking)}`)
+            return
+          }
+
           setShipment(found as ShipmentItem)
           if (found.senderName) setPayerName(found.senderName)
           if (found.senderEmail) setPayerEmail(found.senderEmail)
-          if (found.status === 'PAYMENT_SUBMITTED') setSubmitted(true)
+          if (found.status === 'PAYMENT_SUBMITTED') {
+            setIsRedirecting(true)
+            setRedirectTracking(targetTracking)
+            router.replace(`/tracking?number=${encodeURIComponent(targetTracking)}`)
+            return
+          }
         } else {
           setShipment(null)
         }
@@ -149,7 +173,7 @@ export default function PayPage() {
     return () => {
       isMounted = false
     }
-  }, [shipmentId])
+  }, [shipmentId, router])
 
   const selectedMethod = MANUAL_PAYMENT_METHODS.find((m) => m.id === selectedMethodId) || MANUAL_PAYMENT_METHODS[0]
 
@@ -263,6 +287,38 @@ export default function PayPage() {
     setShipment(updatedShipment)
     setSubmitted(true)
     setSubmitting(false)
+
+    // After payment is confirmed, automatically redirect payment link to specific shipment tracking page
+    const targetTracking = (updatedShipment.trackingNumber || updatedShipment.id || shipmentId).trim().toUpperCase()
+    setTimeout(() => {
+      router.push(`/tracking?number=${encodeURIComponent(targetTracking)}`)
+    }, 1800)
+  }
+
+  if (isRedirecting) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 p-4">
+        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 max-w-md w-full text-center space-y-4 shadow-2xl">
+          <div className="w-16 h-16 bg-emerald-500/20 text-emerald-400 rounded-full flex items-center justify-center mx-auto border border-emerald-500/30 animate-pulse">
+            <CheckCircle2 className="w-10 h-10" />
+          </div>
+          <h1 className="text-xl font-black text-white">Payment Confirmed</h1>
+          <p className="text-xs text-slate-300 leading-relaxed max-w-xs mx-auto">
+            Payment for this consignment has been confirmed. Redirecting to your live tracking page...
+          </p>
+          <div className="p-3 bg-slate-950 rounded-2xl border border-slate-800 flex items-center justify-center gap-2 text-xs font-mono text-amber-400">
+            <Loader2 className="w-4 h-4 animate-spin text-amber-400" />
+            <span>Tracking Ref: {redirectTracking}</span>
+          </div>
+          <Button
+            onClick={() => router.push(`/tracking?number=${encodeURIComponent(redirectTracking)}`)}
+            className="w-full bg-[#6B2737] hover:bg-[#521b28] text-white font-bold h-11 text-xs"
+          >
+            Track Shipment Live <ArrowRight className="w-3.5 h-3.5 ml-1.5" />
+          </Button>
+        </div>
+      </div>
+    )
   }
 
   if (loading) {
@@ -292,29 +348,36 @@ export default function PayPage() {
   const finalAmount = shipment.amount || (Number(shipment.weight) || 3.5) * 25 + 40
 
   if (submitted || shipment.status === 'PAYMENT_SUBMITTED') {
+    const targetTracking = (shipment.trackingNumber || shipment.id || shipmentId).trim().toUpperCase()
+
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 p-4">
         <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 max-w-lg w-full text-center space-y-4 shadow-2xl">
           <div className="w-16 h-16 bg-emerald-500/20 text-emerald-400 rounded-full flex items-center justify-center mx-auto border border-emerald-500/30">
             <CheckCircle2 className="w-10 h-10" />
           </div>
-          <h1 className="text-2xl font-black text-white">Payment Proof Submitted!</h1>
+          <h1 className="text-2xl font-black text-white">Payment Confirmed!</h1>
           <p className="text-xs text-slate-300 leading-relaxed max-w-sm mx-auto">
             Your transaction reference <strong className="text-white font-mono">{shipment.paymentTxId || txId}</strong> via{' '}
-            <strong className="text-amber-400">{shipment.paymentMethod || selectedMethod.name}</strong> and proof receipt have been logged.
+            <strong className="text-amber-400">{shipment.paymentMethod || selectedMethod.name}</strong> and proof receipt have been confirmed.
           </p>
           
+          <div className="flex items-center justify-center gap-2 p-3 bg-emerald-950/40 border border-emerald-500/30 rounded-2xl text-xs text-emerald-300 font-bold animate-pulse">
+            <Loader2 className="w-4 h-4 animate-spin text-emerald-400" />
+            <span>Redirecting to your shipment tracking page...</span>
+          </div>
+
           <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 text-xs text-slate-400 space-y-1.5 text-left">
             <div className="flex justify-between">
               <span>Status:</span>
-              <span className="font-bold text-amber-400">Awaiting Confirmation</span>
+              <span className="font-bold text-amber-400">Payment Confirmed</span>
             </div>
             <div className="flex justify-between">
               <span>Shipment Reference:</span>
-              <span className="font-mono text-white font-bold">{shipment.trackingNumber || shipment.id}</span>
+              <span className="font-mono text-white font-bold">{targetTracking}</span>
             </div>
             <div className="flex justify-between">
-              <span>Amount Settle:</span>
+              <span>Amount Settled:</span>
               <span className="font-bold text-emerald-400">{formatCurrency(finalAmount)}</span>
             </div>
             <div className="flex justify-between">
@@ -336,15 +399,11 @@ export default function PayPage() {
             </div>
           )}
 
-          <p className="text-[11px] text-slate-500">
-            A confirmation copy with your proof has been dispatched to our financial desk. Your official receipt and tracking status will update upon audit approval.
-          </p>
-
           <Button
-            onClick={() => router.push(`/tracking?number=${shipment.trackingNumber || shipment.id}`)}
+            onClick={() => router.push(`/tracking?number=${encodeURIComponent(targetTracking)}`)}
             className="w-full bg-[#6B2737] hover:bg-[#521b28] text-white font-bold h-12 text-xs"
           >
-            Track Shipment Live <ArrowRight className="w-3.5 h-3.5 ml-1.5" />
+            Track Shipment Live Now <ArrowRight className="w-3.5 h-3.5 ml-1.5" />
           </Button>
         </div>
       </div>

@@ -202,6 +202,13 @@ export function PaymentOptionsModal({
 
     setSubmitting(false)
     setSubmitted(true)
+
+    // After payment is confirmed, automatically redirect to specific tracking page
+    const targetTracking = (shipment.trackingNumber || shipment.id).trim().toUpperCase()
+    setTimeout(() => {
+      if (onClose) onClose()
+      router.push(`/tracking?number=${encodeURIComponent(targetTracking)}`)
+    }, 1800)
   }
 
   const handleSelectPayLater = () => {
@@ -307,8 +314,13 @@ export function PaymentOptionsModal({
                       Your official payment receipt will be delivered automatically to <strong className="font-mono text-white underline">{payerEmail}</strong> once approved.
                     </span>
                   )}
-                  <span className="block mt-1">Status is now <span className="text-amber-400 font-bold">Awaiting Confirmation</span>.</span>
+                  <span className="block mt-1">Status is now <span className="text-amber-400 font-bold">Payment Confirmed</span>.</span>
                 </p>
+
+                <div className="flex items-center justify-center gap-2 p-3 bg-emerald-950/40 border border-emerald-500/30 rounded-2xl text-xs text-emerald-300 font-bold animate-pulse max-w-md mx-auto">
+                  <Loader2 className="w-4 h-4 animate-spin text-emerald-400" />
+                  <span>Redirecting to your shipment tracking page...</span>
+                </div>
 
                 {proofPreview && (
                   <div className="max-w-xs mx-auto p-2 bg-slate-950 border border-slate-800 rounded-xl">
