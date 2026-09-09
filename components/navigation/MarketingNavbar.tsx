@@ -27,7 +27,9 @@ function TopBar() {
       className="w-full text-xs py-2 px-4 flex flex-wrap items-center justify-center gap-x-6 gap-y-1"
       style={{ backgroundColor: '#0F1A2E', color: '#C9B8B0' }}
     >
-      <span>📞 +1 (800) SOURCE-PRO</span>
+      <a href="tel:+16183681268" className="hover:text-white transition-colors">
+        📞 (618) 368 1268
+      </a>
       <span className="hidden sm:inline" style={{ color: '#6B2737' }}>|</span>
       <span className="hidden sm:inline">✉ support@sourcedeliverypro.com</span>
       <span className="hidden md:inline" style={{ color: '#6B2737' }}>|</span>

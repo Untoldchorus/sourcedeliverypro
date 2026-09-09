@@ -366,7 +366,7 @@ export default function HomePage() {
             <span className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4" /> Free to Register</span>
             <span className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4" /> No Hidden Fees</span>
             <span className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4" /> 24/7 Support</span>
-            <span className="flex items-center gap-2"><Phone className="w-4 h-4" /> +1 (800) SOURCE-PRO</span>
+            <a href="tel:+16183681268" className="flex items-center gap-2 hover:underline"><Phone className="w-4 h-4" /> (618) 368 1268</a>
           </div>
         </div>
       </section>

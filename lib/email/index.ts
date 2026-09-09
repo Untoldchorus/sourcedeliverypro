@@ -194,7 +194,7 @@ function baseTemplate(content: string): string {
     <div class="body">${content}</div>
     <div class="footer">
       <p>&copy; ${new Date().getFullYear()} <a href="${domain}" style="color: #6B7280; text-decoration: none; font-weight: 600;">SourceDeliveryPro</a>. All rights reserved.</p>
-      <p>Official Global Logistics Portal: <a href="${domain}" style="color: #6B2737; font-weight: bold; text-decoration: none;">www.sourcedeliverypro.com</a></p>
+      <p>Official Global Logistics Portal: <a href="${domain}" style="color: #6B2737; font-weight: bold; text-decoration: none;">www.sourcedeliverypro.com</a> | Support: <a href="tel:+16183681268" style="color: #6B2737; font-weight: bold; text-decoration: none;">(618) 368 1268</a></p>
       <p>You're receiving this email because you have an active shipment or account with SourceDeliveryPro.</p>
     </div>
   </div>
@@ -444,7 +444,7 @@ export async function sendPaymentReceiptEmail(params: {
 
     <p class="p" style="font-size: 13px; color: #6B7280; text-align: center;">
       Official dispatch documents, security clearance, and delivery updates are now active for this consignment.<br/>
-      If you have questions regarding this receipt, please contact finance operations at <a href="mailto:support@sourcedeliverypro.com" style="color: #6B2737; font-weight: bold;">support@sourcedeliverypro.com</a>.
+      If you have questions regarding this receipt, please contact finance operations at <a href="mailto:support@sourcedeliverypro.com" style="color: #6B2737; font-weight: bold;">support@sourcedeliverypro.com</a> or call <a href="tel:+16183681268" style="color: #6B2737; font-weight: bold;">(618) 368 1268</a>.
     </p>
   `)
 

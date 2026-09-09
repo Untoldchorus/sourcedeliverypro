@@ -170,7 +170,7 @@ export function MarketingFooter() {
               <li className="flex items-center gap-2">
                 <span className="text-base">📞</span>
                 <a
-                  href="tel:+18007943846"
+                  href="tel:+16183681268"
                   className="transition-colors duration-200"
                   style={{ color: '#8A9AB5' }}
                   onMouseEnter={(e) =>
@@ -180,7 +180,7 @@ export function MarketingFooter() {
                     ((e.currentTarget as HTMLAnchorElement).style.color = '#8A9AB5')
                   }
                 >
-                  +1 (800) SOURCE-PRO
+                  (618) 368 1268
                 </a>
               </li>
               <li className="flex items-center gap-2">

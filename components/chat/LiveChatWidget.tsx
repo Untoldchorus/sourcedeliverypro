@@ -90,7 +90,7 @@ export function LiveChatWidget() {
       const replyMsg: Message = {
         id: `agent-${Date.now()}`,
         sender: 'agent',
-        text: `Thank you for contacting SourceDeliveryPro! An agent will be with you shortly. You can also track your package at /tracking. Reference: CHAT-${refNum}`,
+        text: `Thank you for contacting SourceDeliveryPro! An agent will be with you shortly. For immediate assistance, call us at (618) 368 1268. You can also track your package at /tracking. Reference: CHAT-${refNum}`,
         timestamp: new Date(),
       }
       setIsTyping(false)

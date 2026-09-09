@@ -71,7 +71,7 @@ export function Footer() {
         <div className="pt-8 border-t border-slate-800/80 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-slate-500">
           <p>© {new Date().getFullYear()} SourceDeliveryPro Logistics Inc. All rights reserved.</p>
           <div className="flex items-center gap-6">
-            <span className="flex items-center gap-1"><Phone className="w-3.5 h-3.5" /> +1 (800) 555-SDPRO</span>
+            <a href="tel:+16183681268" className="flex items-center gap-1 hover:text-white transition"><Phone className="w-3.5 h-3.5" /> (618) 368 1268</a>
             <span className="flex items-center gap-1"><Mail className="w-3.5 h-3.5" /> dispatch@sourcedeliverypro.com</span>
             <span className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5" /> 450 Logistics Blvd, New York, NY</span>
           </div>

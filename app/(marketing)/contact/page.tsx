@@ -72,7 +72,7 @@ export default function ContactPage() {
               </p>
               <p className="flex items-center gap-2.5">
                 <Phone className="w-4 h-4 text-[#6B2737] shrink-0" />
-                <span>+1 (800) 555-SDPRO (Toll-Free Global)</span>
+                <a href="tel:+16183681268" className="hover:underline">(618) 368 1268 (Direct / Toll-Free)</a>
               </p>
               <p className="flex items-center gap-2.5">
                 <Mail className="w-4 h-4 text-[#6B2737] shrink-0" />

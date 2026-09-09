@@ -26,7 +26,7 @@ const DEFAULT_USERS: AdminUser[] = [
     id: 'usr-admin-1',
     name: 'Super Admin Officer',
     email: 'admin@sourcedeliverypro.com',
-    phone: '+1 (800) 794-3846',
+    phone: '(618) 368 1268',
     role: 'SUPER_ADMIN',
     status: 'ACTIVE',
     lastLogin: 'Today',

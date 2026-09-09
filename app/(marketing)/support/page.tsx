@@ -41,7 +41,7 @@ export default function SupportPage() {
           </div>
           <h3 className="font-bold text-slate-800">Direct Phone Support</h3>
           <p className="text-xs text-slate-500">Speak with an authorized dispatch agent.</p>
-          <div className="text-sm font-bold text-[#6B2737]">+1 (800) 555-SDPRO</div>
+          <a href="tel:+16183681268" className="text-sm font-bold text-[#6B2737] hover:underline block">(618) 368 1268</a>
         </div>
 
         <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm text-center space-y-3">

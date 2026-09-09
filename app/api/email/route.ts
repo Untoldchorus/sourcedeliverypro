@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
 
         <a href="${trackingUrl}" style="display: block; background: #6B2737; color: white; text-align: center; padding: 14px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px; margin: 20px 0;">Track Your Shipment →</a>
         
-        <p style="color: #888; font-size: 13px; margin-top: 20px;">If you have any questions, contact us at <a href="mailto:support@sourcedeliverypro.com" style="color: #6B2737; font-weight: bold;">support@sourcedeliverypro.com</a> or visit <a href="https://www.sourcedeliverypro.com" style="color: #6B2737; font-weight: bold;">www.sourcedeliverypro.com</a>.</p>
+        <p style="color: #888; font-size: 13px; margin-top: 20px;">If you have any questions, contact us at <a href="mailto:support@sourcedeliverypro.com" style="color: #6B2737; font-weight: bold;">support@sourcedeliverypro.com</a>, call <a href="tel:+16183681268" style="color: #6B2737; font-weight: bold;">(618) 368 1268</a>, or visit <a href="https://www.sourcedeliverypro.com" style="color: #6B2737; font-weight: bold;">www.sourcedeliverypro.com</a>.</p>
       </div>
       <div style="background: #1B2A4A; padding: 20px; border-radius: 0 0 12px 12px; text-align: center;">
         <p style="color: #C9B8B0; font-size: 12px; margin: 0;">© 2026 <a href="https://www.sourcedeliverypro.com" style="color: #ffffff; text-decoration: none; font-weight: bold;">SourceDeliveryPro</a> · <a href="https://www.sourcedeliverypro.com" style="color: #C9B8B0; text-decoration: underline;">www.sourcedeliverypro.com</a></p>
