@@ -201,8 +201,40 @@ function TrackingContent() {
         }
         setData(mergeAdminOverride(json.data as TrackingData))
       } else {
-        // The server definitively says shipment was not found or has been deleted
-        // Purge any local storage ghost entry for this tracking number
+        const localShipments = getLocalShipments()
+        const localFound = localShipments.find(
+          (s: any) => (s.trackingNumber || s.id || '').toUpperCase().trim() === trimmed
+        )
+        if (localFound) {
+          setData({
+            trackingNumber: localFound.trackingNumber || localFound.id,
+            status: localFound.status || 'PENDING_PAYMENT',
+            serviceType: localFound.serviceType || localFound.service || 'INTERNATIONAL_EXPRESS',
+            originCity: localFound.senderCity || localFound.origin || 'Origin Facility',
+            originCountry: localFound.originCountry || 'US',
+            destinationCity: localFound.recipientCity || localFound.destination || 'Destination Hub',
+            destinationCountry: localFound.destinationCountry || 'Global',
+            weight: Number(localFound.weight) || 3.5,
+            packageCount: 1,
+            estimatedDelivery: localFound.estimatedDelivery || 'In Transit',
+            currentLocation: localFound.currentLocation || localFound.senderCity || 'Processing Hub',
+            mapQuery: localFound.mapQuery || undefined,
+            showMap: localFound.showMap !== undefined ? Boolean(localFound.showMap) : true,
+            remarks: Array.isArray(localFound.remarks) ? localFound.remarks : [],
+            events: localFound.events && localFound.events.length > 0
+              ? localFound.events
+              : [
+                  {
+                    id: 'default-evt-1',
+                    status: localFound.status || 'PENDING_PAYMENT',
+                    description: `Shipment registered at ${localFound.senderCity || 'Processing Facility'}`,
+                    location: localFound.senderCity || 'Processing Facility',
+                    timestamp: localFound.createdAt || new Date().toISOString(),
+                  },
+                ],
+          })
+          return
+        }
         deleteLocalShipment(trimmed)
         setError(
           json.error?.message ||
