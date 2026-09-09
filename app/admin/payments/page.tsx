@@ -21,7 +21,8 @@ import {
   User,
   Mail,
   Send,
-  Loader2
+  Loader2,
+  Trash2
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { formatCurrency } from '@/lib/utils'
@@ -29,7 +30,9 @@ import {
   getLocalShipments,
   saveLocalShipment,
   saveLocalReceipt,
-  getUnifiedShipments
+  getUnifiedShipments,
+  deleteLocalShipment,
+  addDeletedShipment
 } from '@/lib/payments/manualOptions'
 
 export default function AdminPaymentsPage() {
@@ -326,6 +329,49 @@ export default function AdminPaymentsPage() {
     setTimeout(() => setCopiedLink(null), 2000)
   }
 
+  // Delete Payment & Consignment Record
+  const handleDeletePayment = async (p: any) => {
+    const trk = p.trackingNumber || p.id || 'this record'
+    if (!confirm(`Are you sure you want to permanently delete payment and shipment record for ${trk}?`)) {
+      return
+    }
+
+    const id = p.id
+    const trackingNumber = p.trackingNumber
+    const shpNum = p.shipmentNumber
+
+    if (id) {
+      deleteLocalShipment(id)
+      addDeletedShipment(id)
+    }
+    if (trackingNumber) {
+      deleteLocalShipment(trackingNumber)
+      addDeletedShipment(trackingNumber)
+    }
+    if (shpNum) {
+      deleteLocalShipment(shpNum)
+      addDeletedShipment(shpNum)
+    }
+
+    try {
+      await fetch(
+        `/api/shipments?id=${encodeURIComponent(id || '')}&trackingNumber=${encodeURIComponent(trackingNumber || '')}`,
+        { method: 'DELETE' }
+      )
+    } catch (err) {
+      console.warn('API delete error:', err)
+    }
+
+    setPayments((prev) =>
+      prev.filter(
+        (item) =>
+          item.id !== id &&
+          item.trackingNumber !== trackingNumber &&
+          item.shipmentNumber !== shpNum
+      )
+    )
+  }
+
   // Helper status checkers
   const isPendingApproval = (p: any) =>
     p.status === 'PAYMENT_SUBMITTED' ||
@@ -590,127 +636,140 @@ export default function AdminPaymentsPage() {
                         </span>
                       )}
                     </td>
-                    <td className="p-3 text-right space-x-2">
-                      {/* Action for Awaiting Approval */}
-                      {isPendingApproval(p) && (
-                        <div className="inline-flex items-center gap-1.5">
-                          {p.paymentProof && (
+                    <td className="p-3 text-right">
+                      <div className="inline-flex items-center justify-end gap-1.5 flex-wrap">
+                        {/* Action for Awaiting Approval */}
+                        {isPendingApproval(p) && (
+                          <>
+                            {p.paymentProof && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setViewingProof(p)}
+                                className="border-amber-500/40 text-amber-400 hover:bg-amber-500/10 font-bold text-xs"
+                              >
+                                <Eye className="w-3.5 h-3.5 mr-1" /> View Proof
+                              </Button>
+                            )}
+                            <Button
+                              size="sm"
+                              disabled={processingId === p.id}
+                              onClick={() => handleApprove(p)}
+                              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs"
+                            >
+                              {processingId === p.id ? (
+                                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <>
+                                  <CheckCircle2 className="w-3.5 h-3.5 mr-1" /> Approve &amp; Generate Receipt
+                                </>
+                              )}
+                            </Button>
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => setViewingProof(p)}
-                              className="border-amber-500/40 text-amber-400 hover:bg-amber-500/10 font-bold text-xs"
+                              disabled={processingId === p.id}
+                              onClick={() => setRejectingPayment(p)}
+                              className="border-red-500/40 text-red-400 hover:bg-red-500/10 font-bold text-xs"
                             >
-                              <Eye className="w-3.5 h-3.5 mr-1" /> View Proof
+                              <XCircle className="w-3.5 h-3.5 mr-1" /> Reject
                             </Button>
-                          )}
-                          <Button
-                            size="sm"
-                            disabled={processingId === p.id}
-                            onClick={() => handleApprove(p)}
-                            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs"
-                          >
-                            {processingId === p.id ? (
-                              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                            ) : (
-                              <>
-                                <CheckCircle2 className="w-3.5 h-3.5 mr-1" /> Approve &amp; Generate Receipt
-                              </>
-                            )}
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            disabled={processingId === p.id}
-                            onClick={() => setRejectingPayment(p)}
-                            className="border-red-500/40 text-red-400 hover:bg-red-500/10 font-bold text-xs"
-                          >
-                            <XCircle className="w-3.5 h-3.5 mr-1" /> Reject
-                          </Button>
-                        </div>
-                      )}
+                          </>
+                        )}
 
-                      {/* Action for Pending Payment Link */}
-                      {isPendingPayment(p) && (
-                        <div className="inline-flex items-center gap-1.5">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => window.open('/pay/' + (p.id || p.trackingNumber), '_blank')}
-                            className="border-slate-700 text-sky-400 hover:bg-slate-800 text-xs"
-                            title="Open Universal Pay Link in new tab"
-                          >
-                            <ExternalLink className="w-3.5 h-3.5 mr-1" /> Pay Portal
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleCopyLink(p.id || p.trackingNumber)}
-                            className="border-slate-700 text-slate-300 hover:bg-slate-800 text-xs"
-                          >
-                            {copiedLink === (p.id || p.trackingNumber) ? (
-                              <>
-                                <Check className="w-3.5 h-3.5 mr-1 text-emerald-400" /> Copied!
-                              </>
-                            ) : (
-                              <>
-                                <Copy className="w-3.5 h-3.5 mr-1" /> Copy Link
-                              </>
-                            )}
-                          </Button>
-                          <Button
-                            size="sm"
-                            onClick={() => handleApprove(p)}
-                            className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold"
-                          >
-                            Approve &amp; Issue Receipt
-                          </Button>
-                        </div>
-                      )}
+                        {/* Action for Pending Payment Link */}
+                        {isPendingPayment(p) && (
+                          <>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => window.open('/pay/' + (p.id || p.trackingNumber), '_blank')}
+                              className="border-slate-700 text-sky-400 hover:bg-slate-800 text-xs"
+                              title="Open Universal Pay Link in new tab"
+                            >
+                              <ExternalLink className="w-3.5 h-3.5 mr-1" /> Pay Portal
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleCopyLink(p.id || p.trackingNumber)}
+                              className="border-slate-700 text-slate-300 hover:bg-slate-800 text-xs"
+                            >
+                              {copiedLink === (p.id || p.trackingNumber) ? (
+                                <>
+                                  <Check className="w-3.5 h-3.5 mr-1 text-emerald-400" /> Copied!
+                                </>
+                              ) : (
+                                <>
+                                  <Copy className="w-3.5 h-3.5 mr-1" /> Copy Link
+                                </>
+                              )}
+                            </Button>
+                            <Button
+                              size="sm"
+                              onClick={() => handleApprove(p)}
+                              className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold"
+                            >
+                              Approve &amp; Issue Receipt
+                            </Button>
+                          </>
+                        )}
 
-                      {/* Action for Approved: View Generated Receipt */}
-                      {isApproved(p) && (
+                        {/* Action for Approved: View Generated Receipt */}
+                        {isApproved(p) && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              const recipientToUse = (p.payerEmail || p.paymentPayerEmail || p.senderEmail || p.customerEmail || '').trim()
+                              setCustomRecipientEmail(recipientToUse)
+                              if (p.receipt) {
+                                setViewingReceipt({
+                                  ...p.receipt,
+                                  payerEmail: recipientToUse || p.receipt.payerEmail,
+                                  customerEmail: recipientToUse || p.receipt.customerEmail,
+                                  receiptEmailed: p.receipt.receiptEmailed || Boolean(p.receiptEmailed),
+                                  receiptEmailedTo: p.receipt.receiptEmailedTo || p.receiptEmailedTo || recipientToUse,
+                                })
+                              } else {
+                                // Synthetic receipt preview
+                                setViewingReceipt({
+                                  receiptNumber: p.receiptNumber || 'RCPT-2026-' + Math.floor(10000 + Math.random() * 90000),
+                                  customerName: p.paymentPayer || p.senderName || p.customerName || 'Customer',
+                                  customerEmail: recipientToUse || 'customer@sourcedeliverypro.com',
+                                  payerEmail: recipientToUse,
+                                  trackingNumber: p.trackingNumber,
+                                  paymentRef: p.paymentTxId || p.transactionId || 'PAY-VERIFIED',
+                                  paymentMethod: p.paymentMethod || 'Manual Verified Payment',
+                                  subtotal: Math.round((amount / 1.08) * 100) / 100,
+                                  tax: Math.round((amount - amount / 1.08) * 100) / 100,
+                                  total: amount,
+                                  status: 'PAID',
+                                  createdDate: 'Approved',
+                                  origin: p.origin || p.senderCity,
+                                  destination: p.destination || p.recipientCity,
+                                  receiptEmailed: Boolean(p.receiptEmailed),
+                                  receiptEmailedTo: p.receiptEmailedTo || recipientToUse,
+                                })
+                              }
+                            }}
+                            className="border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 text-xs font-bold"
+                          >
+                            <FileText className="w-3.5 h-3.5 mr-1" /> View Receipt
+                          </Button>
+                        )}
+
+                        {/* Delete Button (Always available for admin) */}
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => {
-                            const recipientToUse = (p.payerEmail || p.paymentPayerEmail || p.senderEmail || p.customerEmail || '').trim()
-                            setCustomRecipientEmail(recipientToUse)
-                            if (p.receipt) {
-                              setViewingReceipt({
-                                ...p.receipt,
-                                payerEmail: recipientToUse || p.receipt.payerEmail,
-                                customerEmail: recipientToUse || p.receipt.customerEmail,
-                                receiptEmailed: p.receipt.receiptEmailed || Boolean(p.receiptEmailed),
-                                receiptEmailedTo: p.receipt.receiptEmailedTo || p.receiptEmailedTo || recipientToUse,
-                              })
-                            } else {
-                              // Synthetic receipt preview
-                              setViewingReceipt({
-                                receiptNumber: p.receiptNumber || 'RCPT-2026-' + Math.floor(10000 + Math.random() * 90000),
-                                customerName: p.paymentPayer || p.senderName || p.customerName || 'Customer',
-                                customerEmail: recipientToUse || 'customer@sourcedeliverypro.com',
-                                payerEmail: recipientToUse,
-                                trackingNumber: p.trackingNumber,
-                                paymentRef: p.paymentTxId || p.transactionId || 'PAY-VERIFIED',
-                                paymentMethod: p.paymentMethod || 'Manual Verified Payment',
-                                subtotal: Math.round((amount / 1.08) * 100) / 100,
-                                tax: Math.round((amount - amount / 1.08) * 100) / 100,
-                                total: amount,
-                                status: 'PAID',
-                                createdDate: 'Approved',
-                                origin: p.origin || p.senderCity,
-                                destination: p.destination || p.recipientCity,
-                                receiptEmailed: Boolean(p.receiptEmailed),
-                                receiptEmailedTo: p.receiptEmailedTo || recipientToUse,
-                              })
-                            }
-                          }}
-                          className="border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 text-xs font-bold"
+                          onClick={() => handleDeletePayment(p)}
+                          className="border-red-500/40 text-red-400 hover:bg-red-500/15 hover:text-red-300 font-bold text-xs"
+                          title="Permanently Delete Transaction & Consignment"
                         >
-                          <FileText className="w-3.5 h-3.5 mr-1" /> View Receipt
+                          <Trash2 className="w-3.5 h-3.5 mr-1" /> Delete
                         </Button>
-                      )}
+                      </div>
                     </td>
                   </tr>
                 )

@@ -447,7 +447,7 @@ export default function AdminShipmentsPage() {
                 <th className="p-3">Service &amp; Driver</th>
                 <th className="p-3 min-w-[190px]">Status Override</th>
                 <th className="p-3">Price</th>
-                <th className="p-3 text-right">Actions</th>
+                <th className="p-3 text-right sticky right-0 bg-slate-950 z-10 shadow-[-8px_0_12px_rgba(0,0,0,0.5)]">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800">
@@ -528,7 +528,7 @@ export default function AdminShipmentsPage() {
                       </div>
                     </td>
                     <td className="p-3 font-bold text-emerald-400">{formatCurrency(s.amount)}</td>
-                    <td className="p-3 text-right space-x-1.5 whitespace-nowrap">
+                    <td className="p-3 text-right space-x-1.5 whitespace-nowrap sticky right-0 bg-slate-900 z-10 shadow-[-8px_0_12px_rgba(0,0,0,0.5)]">
                       <Button
                         size="sm"
                         onClick={() => openEditModal(s)}
@@ -548,9 +548,9 @@ export default function AdminShipmentsPage() {
                       </Button>
                       <Button
                         size="sm"
-                        variant="ghost"
+                        variant="outline"
                         onClick={async () => {
-                          if (confirm(`Permanently delete shipment ${s.trackingNumber || s.id}?`)) {
+                          if (confirm(`Permanently delete shipment ${s.trackingNumber || s.id}? This will remove it from all feeds and tracking.`)) {
                             const id = s.id
                             const trk = s.trackingNumber
                             const shpNum = s.shipmentNumber
@@ -577,10 +577,10 @@ export default function AdminShipmentsPage() {
                             )
                           }
                         }}
-                        className="text-slate-400 hover:text-red-400 hover:bg-red-500/10 text-xs p-2"
-                        title="Delete Shipment Record"
+                        className="border-red-500/40 text-red-400 hover:bg-red-500/15 hover:text-red-300 font-bold text-xs"
+                        title="Permanently Delete Shipment"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <Trash2 className="w-3.5 h-3.5 mr-1" /> Delete
                       </Button>
                     </td>
                   </tr>
