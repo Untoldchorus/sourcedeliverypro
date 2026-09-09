@@ -424,7 +424,7 @@ export default function PayPage() {
                         ? method.isBlocked
                           ? 'bg-rose-950/40 border-rose-500/60 text-white shadow-md'
                           : 'bg-[#1B2A4A] border-amber-500/60 text-white shadow-md'
-                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'
+                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-white'
                     } ${isPendingThis ? 'border-amber-400 bg-slate-900' : ''}`}
                   >
                     <div className="flex items-center gap-2 min-w-0">
@@ -432,12 +432,16 @@ export default function PayPage() {
                         <Loader2 className="w-3.5 h-3.5 text-amber-400 animate-spin shrink-0" />
                       ) : (
                         <div className={`w-2 h-2 rounded-full shrink-0 ${
-                          method.isBlocked ? 'bg-rose-500' : isCurrent ? 'bg-amber-400' : 'bg-emerald-500/70'
+                          isCurrent
+                            ? method.isBlocked
+                              ? 'bg-rose-500'
+                              : 'bg-amber-400'
+                            : 'bg-slate-600'
                         }`} />
                       )}
                       <span className="text-xs font-bold truncate">{method.name}</span>
                     </div>
-                    {method.isBlocked && (
+                    {isCurrent && method.isBlocked && (
                       <span className="text-[9px] uppercase tracking-wider font-bold px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30 shrink-0">
                         Unavailable
                       </span>
