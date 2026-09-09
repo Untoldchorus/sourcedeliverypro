@@ -38,6 +38,7 @@ export default function AdminPaymentsPage() {
   const [rejectingPayment, setRejectingPayment] = useState<any | null>(null)
   const [rejectionReason, setRejectionReason] = useState('')
   const [viewingReceipt, setViewingReceipt] = useState<any | null>(null)
+  const [viewingProof, setViewingProof] = useState<any | null>(null)
   const [copiedLink, setCopiedLink] = useState<string | null>(null)
 
   const loadData = async () => {
@@ -326,6 +327,15 @@ export default function AdminPaymentsPage() {
                           {p.receiptNumber}
                         </span>
                       )}
+                      {p.paymentProof && (
+                        <button
+                          type="button"
+                          onClick={() => setViewingProof(p)}
+                          className="mt-1 flex items-center gap-1 text-[10px] text-amber-400 hover:text-amber-300 font-bold bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded-lg transition"
+                        >
+                          <Eye className="w-3 h-3" /> View Proof
+                        </button>
+                      )}
                     </td>
                     <td className="p-3 font-mono font-bold text-amber-400">
                       {p.trackingNumber || 'Pending AWB'}
@@ -378,7 +388,17 @@ export default function AdminPaymentsPage() {
                     <td className="p-3 text-right space-x-2">
                       {/* Action for Awaiting Approval */}
                       {isPendingApproval(p) && (
-                        <>
+                        <div className="inline-flex items-center gap-1.5">
+                          {p.paymentProof && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setViewingProof(p)}
+                              className="border-amber-500/40 text-amber-400 hover:bg-amber-500/10 font-bold text-xs"
+                            >
+                              <Eye className="w-3.5 h-3.5 mr-1" /> View Proof
+                            </Button>
+                          )}
                           <Button
                             size="sm"
                             disabled={processingId === p.id}
@@ -402,7 +422,7 @@ export default function AdminPaymentsPage() {
                           >
                             <XCircle className="w-3.5 h-3.5 mr-1" /> Reject
                           </Button>
-                        </>
+                        </div>
                       )}
 
                       {/* Action for Pending Payment Link */}
@@ -525,6 +545,123 @@ export default function AdminPaymentsPage() {
               >
                 Confirm Rejection
               </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Proof of Payment Review Modal */}
+      {viewingProof && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-2xl w-full p-6 space-y-5 shadow-2xl text-white my-8">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                  <ShieldCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Proof of Payment Verification</h3>
+                  <p className="text-xs text-slate-400">
+                    AWB: <span className="font-mono text-amber-400 font-bold">{viewingProof.trackingNumber || viewingProof.id}</span>
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setViewingProof(null)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Payment Summary Box */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3.5 rounded-xl bg-slate-950 border border-slate-800 text-xs">
+              <div>
+                <span className="text-[10px] text-slate-500 uppercase font-bold block">Payer</span>
+                <span className="font-bold text-white truncate block">{viewingProof.paymentPayer || viewingProof.senderName || 'Customer'}</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-500 uppercase font-bold block">Channel</span>
+                <span className="text-amber-400 font-bold block truncate">{viewingProof.paymentMethod || 'Manual Transfer'}</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-500 uppercase font-bold block">Txn Reference</span>
+                <span className="font-mono text-white font-bold block truncate">{viewingProof.paymentTxId || viewingProof.transactionId || 'N/A'}</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-500 uppercase font-bold block">Amount Due</span>
+                <span className="font-bold text-emerald-400 block">{formatCurrency(Number(viewingProof.amount) || 145)}</span>
+              </div>
+            </div>
+
+            {/* Proof Preview Display */}
+            <div className="space-y-2">
+              <span className="text-xs font-bold text-slate-300 block">Uploaded Transfer Receipt / Screenshot:</span>
+              <div className="p-3 rounded-2xl bg-slate-950 border border-slate-800 flex flex-col items-center justify-center min-h-[260px] max-h-[480px] overflow-auto">
+                {viewingProof.paymentProof ? (
+                  viewingProof.paymentProof.startsWith('data:image/') || viewingProof.paymentProof.startsWith('http') ? (
+                    <img
+                      src={viewingProof.paymentProof}
+                      alt="Customer payment proof"
+                      className="max-h-[420px] w-auto max-w-full object-contain rounded-xl border border-slate-800 shadow"
+                    />
+                  ) : (
+                    <div className="p-8 text-center space-y-3">
+                      <FileText className="w-12 h-12 text-amber-400 mx-auto" />
+                      <p className="text-xs text-slate-300 font-mono break-all">{viewingProof.paymentProof.slice(0, 80)}...</p>
+                    </div>
+                  )
+                ) : (
+                  <div className="p-12 text-center text-slate-500 text-xs">
+                    No image preview attached. Please check support email inbox (support@sourcedeliverypro.com).
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-800">
+              {viewingProof.paymentProof && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    const w = window.open('')
+                    w?.document.write(`<img src="${viewingProof.paymentProof}" style="max-width:100%; height:auto;" />`)
+                  }}
+                  className="border-slate-700 text-slate-300 text-xs hover:bg-slate-800"
+                >
+                  <ExternalLink className="w-3.5 h-3.5 mr-1" /> Open Full Image
+                </Button>
+              )}
+
+              <div className="flex items-center gap-2 ml-auto">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    const target = viewingProof
+                    setViewingProof(null)
+                    setRejectingPayment(target)
+                  }}
+                  className="border-red-500/40 text-red-400 hover:bg-red-500/10 text-xs font-bold"
+                >
+                  <XCircle className="w-3.5 h-3.5 mr-1" /> Reject
+                </Button>
+
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    const target = viewingProof
+                    setViewingProof(null)
+                    handleApprove(target)
+                  }}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5 mr-1" /> Approve & Issue Receipt
+                </Button>
+              </div>
             </div>
           </div>
         </div>

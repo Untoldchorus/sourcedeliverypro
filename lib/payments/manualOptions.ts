@@ -371,6 +371,7 @@ export async function getUnifiedShipments(): Promise<any[]> {
           (dbItem.payment?.paymentReference && !dbItem.payment.paymentReference.startsWith('PAY-') ? dbItem.payment.paymentReference : undefined)
         const paymentMethod = dbItem.paymentMethod || dbItem.payment?.metadata?.paymentMethod || dbItem.payment?.provider || 'Manual Payment'
         const paymentPayer = dbItem.paymentPayer || dbItem.payment?.metadata?.paymentPayer || dbItem.senderName || 'Customer'
+        const paymentProof = dbItem.paymentProof || dbItem.payment?.metadata?.proofBase64 || dbItem.payment?.metadata?.paymentProof || undefined
 
         map.set(key, {
           id: dbItem.id,
@@ -394,6 +395,7 @@ export async function getUnifiedShipments(): Promise<any[]> {
           paymentTxId,
           paymentMethod,
           paymentPayer,
+          paymentProof,
           created: dbItem.createdAt ? new Date(dbItem.createdAt).toLocaleDateString() : '',
           createdAt: dbItem.createdAt,
           estimated: '3-5 Days',
