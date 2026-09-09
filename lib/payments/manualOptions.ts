@@ -5,6 +5,8 @@ export interface ManualPaymentMethod {
   iconName: string
   instructions: string
   fields: { label: string; value: string; copyable?: boolean }[]
+  isBlocked?: boolean
+  errorMessage?: string
 }
 
 export const MANUAL_PAYMENT_METHODS: ManualPaymentMethod[] = [
@@ -19,6 +21,7 @@ export const MANUAL_PAYMENT_METHODS: ManualPaymentMethod[] = [
       { label: 'BTC Wallet Address', value: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh', copyable: true },
       { label: 'Memo / Note', value: 'Include your Shipment or Reference ID' },
     ],
+    isBlocked: false,
   },
   {
     id: 'crypto_usdt',
@@ -30,6 +33,7 @@ export const MANUAL_PAYMENT_METHODS: ManualPaymentMethod[] = [
       { label: 'TRC-20 Address (Tron)', value: 'TX8VnL1oQWfX7hK52rPnA638gRMejB7n3J', copyable: true },
       { label: 'ERC-20 Address (Ethereum)', value: '0x71C8360f38bB32c918a24B8B9B1c905f8842149A', copyable: true },
     ],
+    isBlocked: false,
   },
   {
     id: 'zelle',
@@ -42,6 +46,8 @@ export const MANUAL_PAYMENT_METHODS: ManualPaymentMethod[] = [
       { label: 'Zelle Email / Phone', value: 'payments@sourcedeliverypro.com', copyable: true },
       { label: 'Memo', value: 'Enter Shipment ID in payment note' },
     ],
+    isBlocked: true,
+    errorMessage: 'unable to send money at this time',
   },
   {
     id: 'venmo',
@@ -54,6 +60,8 @@ export const MANUAL_PAYMENT_METHODS: ManualPaymentMethod[] = [
       { label: 'Account Name', value: 'SourceDeliveryPro Support' },
       { label: 'Phone Last 4 Digits', value: '8291', copyable: true },
     ],
+    isBlocked: true,
+    errorMessage: 'this service is currently unavailable',
   },
   {
     id: 'wire_transfer',
@@ -69,6 +77,8 @@ export const MANUAL_PAYMENT_METHODS: ManualPaymentMethod[] = [
       { label: 'SWIFT / BIC Code', value: 'CHASUS33XXX', copyable: true },
       { label: 'Bank Address', value: '270 Park Ave, New York, NY 10017, USA' },
     ],
+    isBlocked: true,
+    errorMessage: 'network congestion',
   },
   {
     id: 'paypal',
@@ -81,6 +91,8 @@ export const MANUAL_PAYMENT_METHODS: ManualPaymentMethod[] = [
       { label: 'PayPal Email', value: 'billing@sourcedeliverypro.com', copyable: true },
       { label: 'CashApp $Cashtag', value: '$SourceDeliveryPro', copyable: true },
     ],
+    isBlocked: true,
+    errorMessage: 'this service is temporarily unavailable',
   },
 ]
 
