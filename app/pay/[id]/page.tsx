@@ -36,13 +36,17 @@ interface ShipmentItem {
   weight?: number | string
   amount?: number
   senderName?: string
+  senderEmail?: string
   recipientName?: string
+  recipientEmail?: string
   origin?: string
   destination?: string
   serviceType?: string
   paymentTxId?: string
   paymentMethod?: string
   paymentPayer?: string
+  payerEmail?: string
+  paymentPayerEmail?: string
   paymentProof?: string
 }
 
@@ -68,6 +72,7 @@ export default function PayPage() {
   const [isSwitchingMethod, setIsSwitchingMethod] = useState(false)
   const [pendingMethodName, setPendingMethodName] = useState('')
   const [payerName, setPayerName] = useState('Apex Logistics Global')
+  const [payerEmail, setPayerEmail] = useState('')
   const [txId, setTxId] = useState('')
   const [copiedField, setCopiedField] = useState<string | null>(null)
   const [proofFile, setProofFile] = useState<File | null>(null)
@@ -98,6 +103,7 @@ export default function PayPage() {
               weight: json.data.weight,
               amount: json.data.totalAmount,
               senderName: json.data.senderName,
+              senderEmail: json.data.senderEmail,
               recipientName: json.data.recipientName,
               origin: json.data.originCity,
               destination: json.data.destinationCity,
@@ -115,6 +121,7 @@ export default function PayPage() {
           weight: 3.8,
           amount: 145.00,
           senderName: 'Apex Logistics Global',
+          senderEmail: 'client@example.com',
           recipientName: 'Valued Consignee',
           origin: 'London, Heathrow (LHR)',
           destination: 'New York, JFK (JFK)',
@@ -126,6 +133,7 @@ export default function PayPage() {
         if (found) {
           setShipment(found as ShipmentItem)
           if (found.senderName) setPayerName(found.senderName)
+          if (found.senderEmail) setPayerEmail(found.senderEmail)
           if (found.status === 'PAYMENT_SUBMITTED') setSubmitted(true)
         } else {
           setShipment(null)
@@ -208,6 +216,7 @@ export default function PayPage() {
           amount: finalAmount,
           paymentMethod: selectedMethod.name,
           payerName: payerName.trim() || shipment.senderName || 'Authorized Payer',
+          payerEmail: payerEmail.trim() || shipment.senderEmail || '',
           transactionId: txId.trim(),
           proofBase64: proofPreview,
           proofFileName: proofFileName,
@@ -223,6 +232,8 @@ export default function PayPage() {
       paymentTxId: txId.trim(),
       paymentMethod: selectedMethod.name,
       paymentPayer: payerName.trim() || shipment.senderName || 'Authorized Payer',
+      payerEmail: payerEmail.trim() || shipment.senderEmail || '',
+      paymentPayerEmail: payerEmail.trim() || shipment.senderEmail || '',
       paymentProof: proofPreview || shipment.paymentProof,
       paymentSubmittedAt: new Date().toISOString(),
     }
@@ -518,6 +529,21 @@ export default function PayPage() {
                     value={payerName}
                     onChange={(e) => setPayerName(e.target.value)}
                     placeholder="Full name on payment account"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[#6B2737]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1 flex items-center justify-between">
+                    <span>Payer Email Address</span>
+                    <span className="text-[10px] text-emerald-400 font-normal">Official receipt will be sent here</span>
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    value={payerEmail}
+                    onChange={(e) => setPayerEmail(e.target.value)}
+                    placeholder="email@example.com for payment confirmation"
                     className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[#6B2737]"
                   />
                 </div>

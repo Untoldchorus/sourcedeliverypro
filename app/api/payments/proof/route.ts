@@ -11,6 +11,7 @@ export async function POST(req: NextRequest) {
       amount = 0,
       paymentMethod = 'Manual Transfer',
       payerName = 'Customer',
+      payerEmail = '',
       transactionId = '',
       proofBase64,
       proofFileName,
@@ -54,6 +55,7 @@ export async function POST(req: NextRequest) {
                 provider: paymentMethod,
                 metadata: {
                   payerName,
+                  payerEmail,
                   proofFileName,
                   submittedAt: new Date().toISOString(),
                   notes,
@@ -85,6 +87,7 @@ export async function POST(req: NextRequest) {
         amount: Number(amount) || 0,
         paymentMethod,
         payerName,
+        payerEmail: payerEmail || undefined,
         transactionId,
         proofBase64,
         proofFileName,

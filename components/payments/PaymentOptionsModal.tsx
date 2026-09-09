@@ -65,6 +65,7 @@ export function PaymentOptionsModal({
   const [copiedField, setCopiedField] = useState<string | null>(null)
   const [copiedLink, setCopiedLink] = useState(false)
   const [payerName, setPayerName] = useState(shipment.senderName || '')
+  const [payerEmail, setPayerEmail] = useState(shipment.senderEmail || shipment.recipientEmail || '')
   const [transactionId, setTransactionId] = useState('')
   const [proofFile, setProofFile] = useState<File | null>(null)
   const [proofPreview, setProofPreview] = useState<string | null>(null)
@@ -150,6 +151,7 @@ export function PaymentOptionsModal({
           amount: shipment.amount,
           paymentMethod: selectedMethod.name,
           payerName: payerName.trim() || shipment.senderName || 'Customer',
+          payerEmail: payerEmail.trim() || shipment.senderEmail || '',
           transactionId: transactionId.trim(),
           proofBase64: proofPreview,
           proofFileName: proofFileName,
@@ -165,6 +167,8 @@ export function PaymentOptionsModal({
       paymentMethod: selectedMethod.name,
       paymentTxId: transactionId.trim(),
       paymentPayer: payerName.trim() || shipment.senderName || 'Customer',
+      payerEmail: payerEmail.trim() || shipment.senderEmail || '',
+      paymentPayerEmail: payerEmail.trim() || shipment.senderEmail || '',
       paymentProof: proofPreview,
       paymentSubmittedAt: new Date().toISOString(),
     }
@@ -182,7 +186,9 @@ export function PaymentOptionsModal({
           paymentTxId: transactionId.trim(),
           paymentMethod: selectedMethod.name,
           paymentPayer: payerName.trim() || shipment.senderName || 'Customer',
-          remark: `Payment of ${formatCurrency(shipment.amount)} submitted via ${selectedMethod.name} (Txn Ref: ${transactionId.trim()}) awaiting verification. ${proofPreview ? 'Proof attached.' : ''}`,
+          payerEmail: payerEmail.trim() || shipment.senderEmail || '',
+          paymentPayerEmail: payerEmail.trim() || shipment.senderEmail || '',
+          remark: `Payment of ${formatCurrency(shipment.amount)} submitted via ${selectedMethod.name} (Txn Ref: ${transactionId.trim()}) awaiting verification. Payer Email: ${payerEmail.trim() || shipment.senderEmail || 'N/A'}. ${proofPreview ? 'Proof attached.' : ''}`,
         }),
       })
     } catch (err) {
@@ -291,7 +297,12 @@ export function PaymentOptionsModal({
                 <p className="text-xs text-slate-400 max-w-md mx-auto leading-relaxed">
                   Your transaction reference <strong className="text-white font-mono">{transactionId}</strong> and proof have been received. 
                   A verification alert has been dispatched to our auditing desk at <span className="text-sky-400 font-mono">support@sourcedeliverypro.com</span>. 
-                  Status is now <span className="text-amber-400 font-bold">Awaiting Confirmation</span>.
+                  {payerEmail && (
+                    <span className="block mt-1.5 text-emerald-300 font-medium">
+                      Your official payment receipt will be delivered automatically to <strong className="font-mono text-white underline">{payerEmail}</strong> once approved.
+                    </span>
+                  )}
+                  <span className="block mt-1">Status is now <span className="text-amber-400 font-bold">Awaiting Confirmation</span>.</span>
                 </p>
 
                 {proofPreview && (
@@ -460,18 +471,33 @@ export function PaymentOptionsModal({
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-bold text-slate-300 mb-1">
-                        Transaction ID / Reference Number
+                      <label className="block text-xs font-bold text-slate-300 mb-1 flex items-center justify-between">
+                        <span>Payer Email Address</span>
+                        <span className="text-[10px] text-emerald-400 font-normal">Auto-receives receipt</span>
                       </label>
                       <input
-                        type="text"
+                        type="email"
                         required
-                        value={transactionId}
-                        onChange={(e) => setTransactionId(e.target.value)}
-                        placeholder="e.g. #TXN-982189 / Hash"
+                        value={payerEmail}
+                        onChange={(e) => setPayerEmail(e.target.value)}
+                        placeholder="payer@example.com (for receipt delivery)"
                         className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white focus:outline-none focus:border-[#6B2737]"
                       />
                     </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-300 mb-1">
+                      Transaction ID / Reference Number
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={transactionId}
+                      onChange={(e) => setTransactionId(e.target.value)}
+                      placeholder="e.g. #TXN-982189 / Wire Reference / CashApp Hash"
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white focus:outline-none focus:border-[#6B2737]"
+                    />
                   </div>
 
                   {/* Prominent Upload Payment Proof Component */}

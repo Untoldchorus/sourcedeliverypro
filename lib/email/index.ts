@@ -271,6 +271,7 @@ export async function sendPaymentProofNotificationEmail(params: {
   amount: number
   paymentMethod: string
   payerName: string
+  payerEmail?: string
   transactionId: string
   proofBase64?: string
   proofFileName?: string
@@ -289,6 +290,7 @@ export async function sendPaymentProofNotificationEmail(params: {
       <div style="margin-top: 12px; font-size: 14px; color: #374151;"><strong>Amount Due:</strong> $${params.amount.toFixed(2)}</div>
       <div style="font-size: 14px; color: #374151;"><strong>Payment Method:</strong> ${params.paymentMethod}</div>
       <div style="font-size: 14px; color: #374151;"><strong>Payer Name:</strong> ${params.payerName}</div>
+      ${params.payerEmail ? `<div style="font-size: 14px; color: #374151;"><strong>Payer Email:</strong> <a href="mailto:${params.payerEmail}" style="color:#6B2737;font-weight:bold;">${params.payerEmail}</a></div>` : ''}
       <div style="font-size: 14px; color: #374151;"><strong>Transaction ID / Reference:</strong> <code style="background:#e5e7eb;padding:2px 6px;border-radius:4px;font-weight:bold;">${params.transactionId}</code></div>
       ${params.notes ? `<div style="font-size: 14px; color: #374151; margin-top: 6px;"><strong>Customer Notes:</strong> ${params.notes}</div>` : ''}
     </div>
@@ -322,5 +324,107 @@ export async function sendPaymentProofNotificationEmail(params: {
     subject: `🚨 Payment Proof: ${params.trackingNumber} ($${params.amount.toFixed(2)} - ${params.paymentMethod})`,
     html,
     attachments: attachments.length > 0 ? attachments : undefined,
+  })
+}
+
+export async function sendPaymentReceiptEmail(params: {
+  to: string
+  customerName: string
+  receiptNumber: string
+  trackingNumber: string
+  amount: number
+  subtotal?: number
+  tax?: number
+  paymentMethod: string
+  paymentRef: string
+  createdDate?: string
+  origin?: string
+  destination?: string
+  serviceType?: string
+}): Promise<EmailResult> {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://www.sourcedeliverypro.com'
+  const subtotal = params.subtotal || Math.round((params.amount / 1.08) * 100) / 100
+  const tax = params.tax || Math.round((params.amount - subtotal) * 100) / 100
+
+  const html = baseTemplate(`
+    <div style="background: #ECFDF5; border-left: 4px solid #10B981; padding: 18px; border-radius: 8px; margin-bottom: 24px;">
+      <h2 style="color: #065F46; margin: 0 0 6px; font-size: 20px; font-weight: 800;">Payment Confirmed & Verified! ✅</h2>
+      <p style="color: #047857; margin: 0; font-size: 14px;">Thank you for your payment, <strong>${params.customerName}</strong>. Your transaction has been verified and approved by our finance desk.</p>
+    </div>
+
+    <div style="background: #FAFAFA; border: 1px solid #E5E7EB; border-radius: 12px; padding: 24px; margin: 20px 0;">
+      <table style="width: 100%; border-bottom: 2px solid #E5E7EB; padding-bottom: 16px; margin-bottom: 16px;">
+        <tr>
+          <td>
+            <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #6B7280; font-weight: 700;">Official Receipt</div>
+            <div style="font-size: 20px; font-weight: 900; color: #1B2A4A; font-family: monospace;">${params.receiptNumber}</div>
+          </td>
+          <td style="text-align: right;">
+            <span style="display: inline-block; background: #D1FAE5; color: #065F46; padding: 4px 12px; border-radius: 9999px; font-weight: 800; font-size: 12px; border: 1px solid #A7F3D0;">
+              PAID & VERIFIED
+            </span>
+            <div style="font-size: 12px; color: #6B7280; margin-top: 4px;">Date: ${params.createdDate || new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })}</div>
+          </td>
+        </tr>
+      </table>
+
+      <div style="margin-bottom: 16px;">
+        <table style="width: 100%; font-size: 14px; border-collapse: collapse;">
+          <tbody>
+            <tr style="border-bottom: 1px solid #F3F4F6;">
+              <td style="padding: 9px 0; color: #6B7280;">Air Waybill / Tracking #:</td>
+              <td style="padding: 9px 0; text-align: right; font-weight: 800; color: #6B2737; font-family: monospace; font-size: 15px;">${params.trackingNumber}</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #F3F4F6;">
+              <td style="padding: 9px 0; color: #6B7280;">Payment Method:</td>
+              <td style="padding: 9px 0; text-align: right; font-weight: 600; color: #1F2937;">${params.paymentMethod}</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #F3F4F6;">
+              <td style="padding: 9px 0; color: #6B7280;">Transaction Reference:</td>
+              <td style="padding: 9px 0; text-align: right; font-family: monospace; font-weight: 600; color: #1F2937;">${params.paymentRef}</td>
+            </tr>
+            ${params.origin && params.destination ? `
+            <tr style="border-bottom: 1px solid #F3F4F6;">
+              <td style="padding: 9px 0; color: #6B7280;">Shipment Route:</td>
+              <td style="padding: 9px 0; text-align: right; font-weight: 600; color: #1F2937;">${params.origin} → ${params.destination}</td>
+            </tr>` : ''}
+            ${params.serviceType ? `
+            <tr style="border-bottom: 1px solid #F3F4F6;">
+              <td style="padding: 9px 0; color: #6B7280;">Service Class:</td>
+              <td style="padding: 9px 0; text-align: right; font-weight: 600; color: #1F2937;">${params.serviceType}</td>
+            </tr>` : ''}
+            <tr style="border-bottom: 1px solid #F3F4F6;">
+              <td style="padding: 9px 0; color: #6B7280;">Subtotal:</td>
+              <td style="padding: 9px 0; text-align: right; color: #374151;">$${subtotal.toFixed(2)}</td>
+            </tr>
+            <tr style="border-bottom: 1px solid #E5E7EB;">
+              <td style="padding: 9px 0; color: #6B7280;">Estimated Tax / Fees:</td>
+              <td style="padding: 9px 0; text-align: right; color: #374151;">$${tax.toFixed(2)}</td>
+            </tr>
+            <tr style="font-size: 16px;">
+              <td style="padding: 14px 0; font-weight: 800; color: #1B2A4A;">Total Amount Paid:</td>
+              <td style="padding: 14px 0; text-align: right; font-weight: 900; color: #059669; font-size: 19px;">$${Number(params.amount).toFixed(2)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div style="text-align: center; margin: 28px 0;">
+      <a href="${appUrl}/tracking?number=${encodeURIComponent(params.trackingNumber)}" class="btn">
+        Track Shipment Live
+      </a>
+    </div>
+
+    <p class="p" style="font-size: 13px; color: #6B7280; text-align: center;">
+      Official dispatch documents, security clearance, and delivery updates are now active for this consignment.<br/>
+      If you have questions regarding this receipt, please contact finance operations at <a href="mailto:support@sourcedeliverypro.com" style="color: #6B2737; font-weight: bold;">support@sourcedeliverypro.com</a>.
+    </p>
+  `)
+
+  return sendEmail({
+    to: params.to,
+    subject: `Official Payment Receipt — ${params.receiptNumber} (${params.trackingNumber})`,
+    html,
   })
 }

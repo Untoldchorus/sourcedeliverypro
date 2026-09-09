@@ -18,7 +18,10 @@ import {
   Check,
   Printer,
   ExternalLink,
-  User
+  User,
+  Mail,
+  Send,
+  Loader2
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { formatCurrency } from '@/lib/utils'
@@ -40,6 +43,10 @@ export default function AdminPaymentsPage() {
   const [viewingReceipt, setViewingReceipt] = useState<any | null>(null)
   const [viewingProof, setViewingProof] = useState<any | null>(null)
   const [copiedLink, setCopiedLink] = useState<string | null>(null)
+  const [autoSendReceipt, setAutoSendReceipt] = useState(true)
+  const [receiptSending, setReceiptSending] = useState<string | null>(null)
+  const [receiptSendSuccess, setReceiptSendSuccess] = useState<string | null>(null)
+  const [customRecipientEmail, setCustomRecipientEmail] = useState('')
 
   const loadData = async () => {
     try {
@@ -53,8 +60,68 @@ export default function AdminPaymentsPage() {
   }
 
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('sdp_auto_send_receipt')
+      if (saved !== null) {
+        setAutoSendReceipt(saved === 'true')
+      }
+    }
     loadData()
   }, [])
+
+  const handleToggleAutoReceipt = (val: boolean) => {
+    setAutoSendReceipt(val)
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('sdp_auto_send_receipt', String(val))
+    }
+  }
+
+  const sendReceiptToCustomer = async (receiptData: any, targetEmail?: string) => {
+    const recipient = (targetEmail || customRecipientEmail || receiptData.customerEmail || receiptData.payerEmail || '').trim()
+    if (!recipient || !recipient.includes('@')) {
+      alert('Please enter a valid email address to send the receipt.')
+      return false
+    }
+
+    setReceiptSending(receiptData.receiptNumber || 'active')
+    try {
+      const res = await fetch('/api/payments/receipt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: recipient,
+          customerName: receiptData.customerName || 'Customer',
+          receiptNumber: receiptData.receiptNumber,
+          trackingNumber: receiptData.trackingNumber,
+          amount: receiptData.total || receiptData.amount,
+          subtotal: receiptData.subtotal,
+          tax: receiptData.tax,
+          paymentMethod: receiptData.paymentMethod,
+          paymentRef: receiptData.paymentRef,
+          createdDate: receiptData.createdDate,
+          origin: receiptData.origin,
+          destination: receiptData.destination,
+          serviceType: receiptData.serviceType,
+        }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        setReceiptSendSuccess(`Official receipt ${receiptData.receiptNumber} successfully emailed to ${recipient}`)
+        setTimeout(() => setReceiptSendSuccess(null), 5000)
+        setViewingReceipt((prev: any) => prev ? { ...prev, receiptEmailed: true, receiptEmailedTo: recipient } : prev)
+        return true
+      } else {
+        alert(`Failed to send receipt: ${data.error || 'Server error'}`)
+        return false
+      }
+    } catch (err: any) {
+      console.error('Error sending receipt:', err)
+      alert('Network error while dispatching receipt email.')
+      return false
+    } finally {
+      setReceiptSending(null)
+    }
+  }
 
   const handleApprove = async (pay: any) => {
     setProcessingId(pay.id)
@@ -71,12 +138,26 @@ export default function AdminPaymentsPage() {
 
     const receiptNumber = 'RCPT-2026-' + Math.floor(10000 + Math.random() * 90000)
 
-    const generatedReceipt = {
+    // Resolve customer and payer email
+    const targetEmail = (
+      pay.payerEmail ||
+      pay.paymentPayerEmail ||
+      pay.senderEmail ||
+      pay.customerEmail ||
+      pay.userEmail ||
+      pay.createdBy?.email ||
+      ''
+    ).trim()
+
+    const customerName = pay.paymentPayer || pay.senderName || pay.customerName || 'Customer'
+
+    const generatedReceipt: any = {
       id: 'rcpt-' + Date.now(),
       receiptNumber,
       version: 1,
-      customerName: pay.senderName || pay.customerName || 'Customer',
-      customerEmail: pay.senderEmail || pay.customerEmail || 'customer@sourcedeliverypro.com',
+      customerName,
+      customerEmail: targetEmail || 'customer@sourcedeliverypro.com',
+      payerEmail: targetEmail,
       trackingNumber: tracking,
       paymentRef: pay.paymentTxId || pay.transactionId || ('TXN-' + Date.now()),
       paymentMethod: pay.paymentMethod || 'Manual Payment (Verified)',
@@ -88,6 +169,42 @@ export default function AdminPaymentsPage() {
       origin: pay.origin || pay.senderCity || 'Origin Hub',
       destination: pay.destination || pay.recipientCity || 'Destination Hub',
       serviceType: pay.serviceType || 'Express Courier',
+      receiptEmailed: false,
+      receiptEmailedTo: '',
+    }
+
+    // Auto-send receipt to payer if toggle is enabled
+    if (autoSendReceipt && targetEmail && targetEmail.includes('@')) {
+      try {
+        const emailRes = await fetch('/api/payments/receipt', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            to: targetEmail,
+            customerName: generatedReceipt.customerName,
+            receiptNumber: generatedReceipt.receiptNumber,
+            trackingNumber: generatedReceipt.trackingNumber,
+            amount: generatedReceipt.total,
+            subtotal: generatedReceipt.subtotal,
+            tax: generatedReceipt.tax,
+            paymentMethod: generatedReceipt.paymentMethod,
+            paymentRef: generatedReceipt.paymentRef,
+            createdDate: generatedReceipt.createdDate,
+            origin: generatedReceipt.origin,
+            destination: generatedReceipt.destination,
+            serviceType: generatedReceipt.serviceType,
+          }),
+        })
+        const emailData = await emailRes.json()
+        if (emailData.success) {
+          generatedReceipt.receiptEmailed = true
+          generatedReceipt.receiptEmailedTo = targetEmail
+          setReceiptSendSuccess(`Official receipt automatically sent to payer (${targetEmail})`)
+          setTimeout(() => setReceiptSendSuccess(null), 5000)
+        }
+      } catch (emailErr) {
+        console.warn('Auto send receipt error:', emailErr)
+      }
     }
 
     // 1. Save receipt to local receipts
@@ -101,6 +218,9 @@ export default function AdminPaymentsPage() {
       receiptGenerated: true,
       receiptNumber,
       receipt: generatedReceipt,
+      receiptEmailed: generatedReceipt.receiptEmailed,
+      receiptEmailedTo: generatedReceipt.receiptEmailedTo,
+      payerEmail: targetEmail || pay.payerEmail,
     }
     saveLocalShipment(updatedShipment)
 
@@ -113,7 +233,11 @@ export default function AdminPaymentsPage() {
           id: pay.id,
           trackingNumber: tracking,
           status: 'LABEL_CREATED',
-          remark: `Payment verified & approved by Courier Operations. Shipping label issued. Tracking: ${tracking}`,
+          receiptNumber,
+          receiptEmailed: generatedReceipt.receiptEmailed,
+          receiptEmailedTo: generatedReceipt.receiptEmailedTo,
+          payerEmail: targetEmail || pay.payerEmail,
+          remark: `Payment verified & approved by Courier Operations. Shipping label issued. Tracking: ${tracking}.${generatedReceipt.receiptEmailed ? ` Receipt automatically emailed to ${generatedReceipt.receiptEmailedTo}.` : ''}`,
         }),
       })
     } catch (err) {
@@ -124,7 +248,17 @@ export default function AdminPaymentsPage() {
     setPayments((prev) =>
       prev.map((item) =>
         item.id === pay.id || (pay.trackingNumber && item.trackingNumber === pay.trackingNumber)
-          ? { ...item, status: 'LABEL_CREATED', trackingNumber: tracking, receiptGenerated: true, receiptNumber, receipt: generatedReceipt }
+          ? {
+              ...item,
+              status: 'LABEL_CREATED',
+              trackingNumber: tracking,
+              receiptGenerated: true,
+              receiptNumber,
+              receipt: generatedReceipt,
+              receiptEmailed: generatedReceipt.receiptEmailed,
+              receiptEmailedTo: generatedReceipt.receiptEmailedTo,
+              payerEmail: targetEmail || item.payerEmail,
+            }
           : item
       )
     )
@@ -134,6 +268,7 @@ export default function AdminPaymentsPage() {
     setProcessingId(null)
 
     // Show receipt modal automatically upon approval
+    setCustomRecipientEmail(targetEmail)
     setViewingReceipt(generatedReceipt)
   }
 
@@ -225,7 +360,7 @@ export default function AdminPaymentsPage() {
   return (
     <div className="max-w-7xl mx-auto space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-black text-white flex items-center gap-2">
             <CreditCard className="w-6 h-6 text-[#6B2737]" />
@@ -236,17 +371,70 @@ export default function AdminPaymentsPage() {
           </p>
         </div>
 
-        <div className="relative w-full sm:w-72">
-          <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-2.5" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search Txn ID, Receipt, or AWB..."
-            className="w-full pl-10 pr-4 py-2 rounded-xl bg-slate-900 border border-slate-800 text-xs text-white focus:outline-none"
-          />
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+          {/* Auto-Send Receipt Toggle */}
+          <div className="flex items-center justify-between sm:justify-start gap-3 bg-slate-900 border border-slate-800 px-3.5 py-2 rounded-xl shadow-sm">
+            <div className="flex items-center gap-2">
+              <Mail className={`w-4 h-4 ${autoSendReceipt ? 'text-emerald-400' : 'text-slate-500'}`} />
+              <div className="text-left">
+                <span className="text-xs font-bold text-white block leading-tight">
+                  Auto-Email Receipt
+                </span>
+                <span className="text-[10px] text-slate-400 block">
+                  Send to payer on approval
+                </span>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => handleToggleAutoReceipt(!autoSendReceipt)}
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                autoSendReceipt ? 'bg-emerald-600' : 'bg-slate-700'
+              }`}
+              title={autoSendReceipt ? 'Receipts are automatically emailed to payers upon approval' : 'Receipt auto-sending is disabled'}
+            >
+              <span
+                aria-hidden="true"
+                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                  autoSendReceipt ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              />
+            </button>
+            <span className={`text-[11px] font-black w-7 text-center ${autoSendReceipt ? 'text-emerald-400' : 'text-slate-500'}`}>
+              {autoSendReceipt ? 'ON' : 'OFF'}
+            </span>
+          </div>
+
+          <div className="relative w-full sm:w-64">
+            <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-2.5" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search Txn ID, Receipt, or AWB..."
+              className="w-full pl-10 pr-4 py-2 rounded-xl bg-slate-900 border border-slate-800 text-xs text-white focus:outline-none focus:border-amber-500/50"
+            />
+          </div>
         </div>
       </div>
+
+      {/* Real-time Receipt Notification Toast Banner */}
+      {receiptSendSuccess && (
+        <div className="bg-emerald-950/80 border border-emerald-500/40 text-emerald-200 px-4 py-3 rounded-2xl flex items-center justify-between text-xs font-bold shadow-lg">
+          <div className="flex items-center gap-2.5">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span>{receiptSendSuccess}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setReceiptSendSuccess(null)}
+            className="text-emerald-400 hover:text-white px-2 py-0.5 rounded text-sm"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* Metric Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -342,13 +530,19 @@ export default function AdminPaymentsPage() {
                     </td>
                     <td className="p-3">
                       <span className="font-bold text-white block">
-                        {p.senderName || p.customerName || 'Customer'}
+                        {p.paymentPayer || p.senderName || p.customerName || 'Customer'}
                       </span>
                       <span className="text-[10px] text-slate-400 block">
                         {p.origin || p.senderCity || 'Origin'} → {p.destination || p.recipientCity || 'Destination'}
                       </span>
+                      {(p.payerEmail || p.paymentPayerEmail || p.senderEmail) && (
+                        <div className="mt-1 flex items-center gap-1 text-[10px] text-emerald-400 font-mono">
+                          <Mail className="w-3 h-3 shrink-0" />
+                          <span className="truncate">Receipt to: {p.payerEmail || p.paymentPayerEmail || p.senderEmail}</span>
+                        </div>
+                      )}
                       {(p.userName || p.userEmail || p.createdBy) && (
-                        <div className="mt-1 flex items-center gap-1 text-[10px] text-sky-400">
+                        <div className="mt-0.5 flex items-center gap-1 text-[10px] text-sky-400">
                           <User className="w-3 h-3 shrink-0" />
                           <span>Booked by: <strong>{p.userName || p.createdBy?.name || 'Customer'}</strong> ({p.userEmail || p.createdBy?.email || p.senderEmail})</span>
                         </div>
@@ -375,9 +569,16 @@ export default function AdminPaymentsPage() {
                         </span>
                       )}
                       {isApproved(p) && (
-                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1 w-max">
-                          <CheckCircle2 className="w-3 h-3" /> Paid &amp; Approved
-                        </span>
+                        <div>
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1 w-max">
+                            <CheckCircle2 className="w-3 h-3" /> Paid &amp; Approved
+                          </span>
+                          {p.receiptEmailed && (
+                            <span className="mt-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 flex items-center gap-1 w-max">
+                              <Check className="w-2.5 h-2.5" /> Receipt Emailed
+                            </span>
+                          )}
+                        </div>
                       )}
                       {isRejected(p) && (
                         <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-red-500/10 text-red-400 border border-red-500/20 flex items-center gap-1 w-max">
@@ -469,14 +670,23 @@ export default function AdminPaymentsPage() {
                           size="sm"
                           variant="outline"
                           onClick={() => {
+                            const recipientToUse = (p.payerEmail || p.paymentPayerEmail || p.senderEmail || p.customerEmail || '').trim()
+                            setCustomRecipientEmail(recipientToUse)
                             if (p.receipt) {
-                              setViewingReceipt(p.receipt)
+                              setViewingReceipt({
+                                ...p.receipt,
+                                payerEmail: recipientToUse || p.receipt.payerEmail,
+                                customerEmail: recipientToUse || p.receipt.customerEmail,
+                                receiptEmailed: p.receipt.receiptEmailed || Boolean(p.receiptEmailed),
+                                receiptEmailedTo: p.receipt.receiptEmailedTo || p.receiptEmailedTo || recipientToUse,
+                              })
                             } else {
                               // Synthetic receipt preview
                               setViewingReceipt({
                                 receiptNumber: p.receiptNumber || 'RCPT-2026-' + Math.floor(10000 + Math.random() * 90000),
-                                customerName: p.senderName || p.customerName || 'Customer',
-                                customerEmail: p.senderEmail || 'customer@sourcedeliverypro.com',
+                                customerName: p.paymentPayer || p.senderName || p.customerName || 'Customer',
+                                customerEmail: recipientToUse || 'customer@sourcedeliverypro.com',
+                                payerEmail: recipientToUse,
                                 trackingNumber: p.trackingNumber,
                                 paymentRef: p.paymentTxId || p.transactionId || 'PAY-VERIFIED',
                                 paymentMethod: p.paymentMethod || 'Manual Verified Payment',
@@ -487,6 +697,8 @@ export default function AdminPaymentsPage() {
                                 createdDate: 'Approved',
                                 origin: p.origin || p.senderCity,
                                 destination: p.destination || p.recipientCity,
+                                receiptEmailed: Boolean(p.receiptEmailed),
+                                receiptEmailedTo: p.receiptEmailedTo || recipientToUse,
                               })
                             }
                           }}
@@ -592,6 +804,33 @@ export default function AdminPaymentsPage() {
               <div>
                 <span className="text-[10px] text-slate-500 uppercase font-bold block">Amount Due</span>
                 <span className="font-bold text-emerald-400 block">{formatCurrency(Number(viewingProof.amount) || 145)}</span>
+              </div>
+            </div>
+
+            {/* Payer Email & Auto-Receipt Delivery Target */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl bg-slate-950 border border-slate-800 text-xs">
+              <div className="flex items-center gap-2.5">
+                <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400">
+                  <Mail className="w-4 h-4" />
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 uppercase font-bold block">Payer Receipt Destination</span>
+                  <span className="font-mono font-bold text-white text-xs">
+                    {viewingProof.payerEmail || viewingProof.paymentPayerEmail || viewingProof.senderEmail || 'No email provided'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                {autoSendReceipt ? (
+                  <span className="px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-[11px] font-bold flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3 text-emerald-400" /> Auto-receipt is ON (Will email upon approval)
+                  </span>
+                ) : (
+                  <span className="px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 text-[11px] font-bold flex items-center gap-1">
+                    <AlertTriangle className="w-3 h-3 text-amber-400" /> Auto-receipt is OFF
+                  </span>
+                )}
               </div>
             </div>
 
@@ -772,6 +1011,52 @@ export default function AdminPaymentsPage() {
                 Thank you for choosing SourceDeliveryPro. This document constitutes an official receipt.
               </div>
 
+            </div>
+
+            {/* Email Dispatch & Resend Control */}
+            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2.5 text-xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                <span className="font-bold text-slate-800 flex items-center gap-1.5">
+                  <Mail className="w-4 h-4 text-[#6B2737]" />
+                  <span>Deliver Official Receipt to Customer Email</span>
+                </span>
+                {viewingReceipt.receiptEmailed && (
+                  <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 text-[10px] font-bold flex items-center gap-1 w-max">
+                    <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                    Delivered to {viewingReceipt.receiptEmailedTo || viewingReceipt.customerEmail}
+                  </span>
+                )}
+              </div>
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                <input
+                  type="email"
+                  value={customRecipientEmail || viewingReceipt.payerEmail || viewingReceipt.customerEmail || ''}
+                  onChange={(e) => setCustomRecipientEmail(e.target.value)}
+                  placeholder="Enter payer email address..."
+                  className="flex-1 px-3.5 py-2 rounded-xl border border-slate-300 text-xs text-slate-900 bg-white focus:outline-none focus:border-[#6B2737]"
+                />
+                <Button
+                  size="sm"
+                  disabled={Boolean(receiptSending) || !(customRecipientEmail || viewingReceipt.payerEmail || viewingReceipt.customerEmail)}
+                  onClick={() => sendReceiptToCustomer(viewingReceipt, customRecipientEmail || viewingReceipt.payerEmail || viewingReceipt.customerEmail)}
+                  className="bg-[#6B2737] hover:bg-[#541b27] text-white font-bold text-xs h-9 px-4 shrink-0 flex items-center justify-center gap-1.5"
+                >
+                  {receiptSending ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-300" />
+                      <span>Dispatching Receipt...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-3.5 h-3.5" />
+                      <span>{viewingReceipt.receiptEmailed ? 'Resend Receipt' : 'Email Receipt to Customer'}</span>
+                    </>
+                  )}
+                </Button>
+              </div>
+              <p className="text-[11px] text-slate-500">
+                Payer receives an official branded receipt with payment verification badge and direct shipment tracking button.
+              </p>
             </div>
 
             <div className="flex justify-end">
