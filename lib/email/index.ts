@@ -141,7 +141,23 @@ export async function sendEmail(options: EmailOptions): Promise<EmailResult> {
 // HTML Email Templates
 // ===========================
 
+export const OFFICIAL_DOMAIN = 'https://www.sourcedeliverypro.com'
+
+export function getAppUrl(): string {
+  const envUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL
+  if (
+    envUrl &&
+    !envUrl.includes('vercel.app') &&
+    !envUrl.includes('localhost') &&
+    !envUrl.includes('127.0.0.1')
+  ) {
+    return envUrl.replace(/\/$/, '')
+  }
+  return OFFICIAL_DOMAIN
+}
+
 function baseTemplate(content: string): string {
+  const domain = getAppUrl()
   return `
 <!DOCTYPE html>
 <html lang="en">
@@ -170,13 +186,16 @@ function baseTemplate(content: string): string {
 <body>
   <div class="container">
     <div class="header">
-      <div class="logo">SourceDelivery<span>Pro</span></div>
+      <a href="${domain}" style="text-decoration: none;" target="_blank">
+        <div class="logo">SourceDelivery<span>Pro</span></div>
+      </a>
       <div class="tagline">Ship smarter. Deliver faster. Move the world.</div>
     </div>
     <div class="body">${content}</div>
     <div class="footer">
-      <p>&copy; ${new Date().getFullYear()} SourceDeliveryPro. All rights reserved.</p>
-      <p>You're receiving this email because you have an account with SourceDeliveryPro.</p>
+      <p>&copy; ${new Date().getFullYear()} <a href="${domain}" style="color: #6B7280; text-decoration: none; font-weight: 600;">SourceDeliveryPro</a>. All rights reserved.</p>
+      <p>Official Global Logistics Portal: <a href="${domain}" style="color: #6B2737; font-weight: bold; text-decoration: none;">www.sourcedeliverypro.com</a></p>
+      <p>You're receiving this email because you have an active shipment or account with SourceDeliveryPro.</p>
     </div>
   </div>
 </body>
@@ -184,12 +203,13 @@ function baseTemplate(content: string): string {
 }
 
 export async function sendWelcomeEmail(to: string, name: string): Promise<EmailResult> {
+  const domain = getAppUrl()
   const html = baseTemplate(`
     <h1 class="h1">Welcome to SourceDeliveryPro, ${name}! 🚀</h1>
     <p class="p">Your account has been created. You can now create shipments, track packages, and manage your deliveries all in one place.</p>
-    <a href="${process.env.NEXT_PUBLIC_APP_URL}/dashboard" class="btn">Go to Dashboard</a>
+    <a href="${domain}/dashboard" class="btn">Go to Dashboard</a>
     <hr class="divider">
-    <p class="p" style="font-size:13px;color:#6B7280;">If you didn't create this account, please ignore this email or contact our support team.</p>
+    <p class="p" style="font-size:13px;color:#6B7280;">If you didn't create this account, please ignore this email or contact our support team at <a href="mailto:support@sourcedeliverypro.com" style="color:#6B2737;font-weight:bold;">support@sourcedeliverypro.com</a>.</p>
   `)
   return sendEmail({ to, subject: 'Welcome to SourceDeliveryPro!', html })
 }
@@ -201,6 +221,7 @@ export async function sendShipmentConfirmationEmail(
   recipientName: string,
   estimatedDelivery: string
 ): Promise<EmailResult> {
+  const domain = getAppUrl()
   const html = baseTemplate(`
     <h1 class="h1">Your shipment is confirmed! 📦</h1>
     <p class="p">Great news! Your shipment has been created and is ready to go.</p>
@@ -211,7 +232,7 @@ export async function sendShipmentConfirmationEmail(
       <div style="font-size:14px;color:#374151;">To: ${recipientName}</div>
       <div style="font-size:14px;color:#374151;">Est. Delivery: ${estimatedDelivery}</div>
     </div>
-    <a href="${process.env.NEXT_PUBLIC_APP_URL}/track/${trackingNumber}" class="btn">Track Your Shipment</a>
+    <a href="${domain}/tracking?number=${encodeURIComponent(trackingNumber)}" class="btn">Track Your Shipment</a>
   `)
   return sendEmail({ to, subject: `Shipment Confirmed — ${trackingNumber}`, html })
 }
@@ -221,6 +242,7 @@ export async function sendDeliveryConfirmationEmail(
   trackingNumber: string,
   deliveredAt: string
 ): Promise<EmailResult> {
+  const domain = getAppUrl()
   const html = baseTemplate(`
     <h1 class="h1">Your package has been delivered! ✅</h1>
     <p class="p">Your shipment has been successfully delivered.</p>
@@ -229,7 +251,7 @@ export async function sendDeliveryConfirmationEmail(
       <div class="tracking-number">${trackingNumber}</div>
       <div style="margin-top:8px;font-size:14px;color:#374151;">Delivered at: ${deliveredAt}</div>
     </div>
-    <a href="${process.env.NEXT_PUBLIC_APP_URL}/dashboard" class="btn">View Your Dashboard</a>
+    <a href="${domain}/dashboard" class="btn">View Your Dashboard</a>
   `)
   return sendEmail({ to, subject: `Package Delivered — ${trackingNumber}`, html })
 }
@@ -239,7 +261,8 @@ export async function sendPasswordResetEmail(
   resetToken: string,
   name: string
 ): Promise<EmailResult> {
-  const resetUrl = `${process.env.NEXT_PUBLIC_APP_URL}/reset-password?token=${resetToken}`
+  const domain = getAppUrl()
+  const resetUrl = `${domain}/reset-password?token=${encodeURIComponent(resetToken)}`
   const html = baseTemplate(`
     <h1 class="h1">Reset your password</h1>
     <p class="p">Hi ${name}, we received a request to reset your password. Click the button below to continue. This link expires in 1 hour.</p>
@@ -255,6 +278,7 @@ export async function sendSupportTicketEmail(
   ticketNumber: string,
   subject: string
 ): Promise<EmailResult> {
+  const domain = getAppUrl()
   const html = baseTemplate(`
     <h1 class="h1">We received your support request</h1>
     <p class="p">Your ticket has been created and our team will respond shortly.</p>
@@ -263,7 +287,7 @@ export async function sendSupportTicketEmail(
       <div class="tracking-number" style="font-size:18px;">${ticketNumber}</div>
       <div style="margin-top:8px;font-size:14px;color:#374151;">Subject: ${subject}</div>
     </div>
-    <a href="${process.env.NEXT_PUBLIC_APP_URL}/dashboard/support" class="btn">View Ticket</a>
+    <a href="${domain}/dashboard/support" class="btn">View Ticket</a>
   `)
   return sendEmail({ to, subject: `Support Ticket Created — ${ticketNumber}`, html })
 }
@@ -306,7 +330,7 @@ export async function sendPaymentProofNotificationEmail(params: {
       </div>
     ` : ''}
 
-    <a href="${process.env.NEXT_PUBLIC_APP_URL || 'https://sourcedeliverypro.com'}/admin/payments" class="btn">Open Admin Payment Verification</a>
+    <a href="${getAppUrl()}/admin/payments" class="btn">Open Admin Payment Verification</a>
   `)
 
   // Prepare attachments if proofBase64 is provided
@@ -344,7 +368,7 @@ export async function sendPaymentReceiptEmail(params: {
   destination?: string
   serviceType?: string
 }): Promise<EmailResult> {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://www.sourcedeliverypro.com'
+  const appUrl = getAppUrl()
   const subtotal = params.subtotal || Math.round((params.amount / 1.08) * 100) / 100
   const tax = params.tax || Math.round((params.amount - subtotal) * 100) / 100
 

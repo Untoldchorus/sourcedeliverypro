@@ -80,12 +80,10 @@ export const authConfig: NextAuthConfig = {
     async redirect({ url, baseUrl }) {
       // Relative url
       if (url.startsWith('/')) {
-        if (baseUrl.includes('localhost') && process.env.NODE_ENV === 'production') {
-          const prodUrl = process.env.NEXT_PUBLIC_APP_URL && !process.env.NEXT_PUBLIC_APP_URL.includes('localhost')
+        if ((baseUrl.includes('localhost') || baseUrl.includes('vercel.app')) && process.env.NODE_ENV === 'production') {
+          const prodUrl = process.env.NEXT_PUBLIC_APP_URL && !process.env.NEXT_PUBLIC_APP_URL.includes('localhost') && !process.env.NEXT_PUBLIC_APP_URL.includes('vercel.app')
             ? process.env.NEXT_PUBLIC_APP_URL
-            : process.env.VERCEL_PROJECT_PRODUCTION_URL
-            ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
-            : 'https://sourcedeliverypro.vercel.app'
+            : 'https://www.sourcedeliverypro.com'
           return `${prodUrl}${url}`
         }
         return `${baseUrl}${url}`
@@ -109,6 +107,10 @@ export const authConfig: NextAuthConfig = {
           return url
         }
       } catch {}
+
+      if (baseUrl.includes('vercel.app')) {
+        return 'https://www.sourcedeliverypro.com'
+      }
 
       return baseUrl
     },

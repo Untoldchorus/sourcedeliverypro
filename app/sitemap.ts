@@ -1,7 +1,10 @@
 import { MetadataRoute } from 'next'
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://sourcedeliverypro.com'
+  const envUrl = process.env.NEXT_PUBLIC_APP_URL
+  const baseUrl = envUrl && !envUrl.includes('vercel.app') && !envUrl.includes('localhost')
+    ? envUrl.replace(/\/$/, '')
+    : 'https://www.sourcedeliverypro.com'
 
   const routes = [
     '',

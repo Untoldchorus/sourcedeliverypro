@@ -315,7 +315,11 @@ export default function AdminPaymentsPage() {
   }
 
   const handleCopyLink = (shipmentId: string) => {
-    const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000'
+    const rawOrigin = typeof window !== 'undefined' ? window.location.origin : ''
+    const origin =
+      rawOrigin && !rawOrigin.includes('vercel.app') && !rawOrigin.includes('localhost')
+        ? rawOrigin
+        : 'https://www.sourcedeliverypro.com'
     const link = `${origin}/pay/${shipmentId}`
     navigator.clipboard.writeText(link)
     setCopiedLink(shipmentId)

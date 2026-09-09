@@ -76,7 +76,11 @@ export function PaymentOptionsModal({
 
   if (!isOpen) return null
 
-  const originUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000'
+  const rawOrigin = typeof window !== 'undefined' ? window.location.origin : ''
+  const originUrl =
+    rawOrigin && !rawOrigin.includes('vercel.app') && !rawOrigin.includes('localhost')
+      ? rawOrigin
+      : 'https://www.sourcedeliverypro.com'
   const paymentLink = `${originUrl}/pay/${shipment.id || shipment.trackingNumber}`
 
   const selectedMethod = MANUAL_PAYMENT_METHODS.find((m) => m.id === selectedMethodId) || MANUAL_PAYMENT_METHODS[0]

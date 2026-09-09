@@ -6,14 +6,18 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const { to, subject, trackingNumber, senderName, recipientName, origin, destination, service, estimatedDelivery, awbLink } = body
 
-    const trackingUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/tracking?number=${trackingNumber}`
+    const rawUrl = process.env.NEXT_PUBLIC_APP_URL
+    const appUrl = rawUrl && !rawUrl.includes('vercel.app') && !rawUrl.includes('localhost') ? rawUrl.replace(/\/$/, '') : 'https://www.sourcedeliverypro.com'
+    const trackingUrl = `${appUrl}/tracking?number=${encodeURIComponent(trackingNumber)}`
 
     const html = `
     <!DOCTYPE html>
     <html>
     <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #f5f5f5; padding: 20px;">
       <div style="background: #1B2A4A; padding: 30px; border-radius: 12px 12px 0 0; text-align: center;">
-        <h1 style="color: white; margin: 0; font-size: 24px;">SourceDeliveryPro</h1>
+        <a href="https://www.sourcedeliverypro.com" style="text-decoration: none;" target="_blank">
+          <h1 style="color: white; margin: 0; font-size: 24px;">SourceDeliveryPro</h1>
+        </a>
         <p style="color: #C9B8B0; margin: 8px 0 0;">Shipment Confirmation</p>
       </div>
       <div style="background: white; padding: 30px; border-left: 4px solid #6B2737;">
@@ -33,10 +37,10 @@ export async function POST(req: NextRequest) {
 
         <a href="${trackingUrl}" style="display: block; background: #6B2737; color: white; text-align: center; padding: 14px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px; margin: 20px 0;">Track Your Shipment →</a>
         
-        <p style="color: #888; font-size: 13px; margin-top: 20px;">If you have any questions, contact us at support@sourcedeliverypro.com or via live chat on our website.</p>
+        <p style="color: #888; font-size: 13px; margin-top: 20px;">If you have any questions, contact us at <a href="mailto:support@sourcedeliverypro.com" style="color: #6B2737; font-weight: bold;">support@sourcedeliverypro.com</a> or visit <a href="https://www.sourcedeliverypro.com" style="color: #6B2737; font-weight: bold;">www.sourcedeliverypro.com</a>.</p>
       </div>
       <div style="background: #1B2A4A; padding: 20px; border-radius: 0 0 12px 12px; text-align: center;">
-        <p style="color: #C9B8B0; font-size: 12px; margin: 0;">© 2026 SourceDeliveryPro · All Rights Reserved</p>
+        <p style="color: #C9B8B0; font-size: 12px; margin: 0;">© 2026 <a href="https://www.sourcedeliverypro.com" style="color: #ffffff; text-decoration: none; font-weight: bold;">SourceDeliveryPro</a> · <a href="https://www.sourcedeliverypro.com" style="color: #C9B8B0; text-decoration: underline;">www.sourcedeliverypro.com</a></p>
       </div>
     </body>
     </html>

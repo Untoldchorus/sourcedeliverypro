@@ -1,4 +1,4 @@
-﻿export type PaymentProvider = 'paystack' | 'stripe' | 'flutterwave' | 'simulation'
+export type PaymentProvider = 'paystack' | 'stripe' | 'flutterwave' | 'simulation'
 
 export interface InitiatePaymentParams {
   amount: number // in major currency unit (USD, NGN, etc.)
@@ -92,7 +92,10 @@ function detectProvider(currency: string): PaymentProvider {
 
 // ========== SIMULATION ==========
 async function simulatePaymentInit(params: InitiatePaymentParams): Promise<PaymentInitResult> {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
+  const envUrl = process.env.NEXT_PUBLIC_APP_URL
+  const appUrl = envUrl && !envUrl.includes('vercel.app') && !envUrl.includes('localhost')
+    ? envUrl.replace(/\/$/, '')
+    : 'https://www.sourcedeliverypro.com'
   return {
     success: true,
     authorizationUrl: `${appUrl}/payment/simulate?ref=${params.reference}&amount=${params.amount}&currency=${params.currency}`,

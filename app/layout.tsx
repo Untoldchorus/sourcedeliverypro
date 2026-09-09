@@ -17,12 +17,17 @@ export const metadata: Metadata = {
   keywords: ['courier', 'shipping', 'freight', 'tracking', 'logistics', 'express delivery', 'international shipping'],
   authors: [{ name: 'SourceDeliveryPro Logistics' }],
   metadataBase: new URL(
-    (process.env.NEXT_PUBLIC_APP_URL || 'https://sourcedeliverypro.com').replace(/^["']|["']$/g, '')
+    (process.env.NEXT_PUBLIC_APP_URL &&
+    !process.env.NEXT_PUBLIC_APP_URL.includes('vercel.app') &&
+    !process.env.NEXT_PUBLIC_APP_URL.includes('localhost')
+      ? process.env.NEXT_PUBLIC_APP_URL
+      : 'https://www.sourcedeliverypro.com'
+    ).replace(/^["']|["']$/g, '')
   ),
   openGraph: {
     title: 'SourceDeliveryPro - Ship Smarter. Deliver Faster.',
     description: 'International express shipping and intelligent logistics management.',
-    url: 'https://sourcedeliverypro.com',
+    url: 'https://www.sourcedeliverypro.com',
     siteName: 'SourceDeliveryPro',
     type: 'website',
   },

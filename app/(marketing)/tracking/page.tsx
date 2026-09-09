@@ -273,7 +273,12 @@ function TrackingContent() {
   }
 
   const handleShare = async () => {
-    const url = `${window.location.origin}/tracking?number=${encodeURIComponent(data?.trackingNumber || inputValue)}`
+    const rawOrigin = typeof window !== 'undefined' ? window.location.origin : ''
+    const origin =
+      rawOrigin && !rawOrigin.includes('vercel.app') && !rawOrigin.includes('localhost')
+        ? rawOrigin
+        : 'https://www.sourcedeliverypro.com'
+    const url = `${origin}/tracking?number=${encodeURIComponent(data?.trackingNumber || inputValue)}`
     await navigator.clipboard.writeText(url)
     setCopied(true)
     setTimeout(() => setCopied(false), 2500)

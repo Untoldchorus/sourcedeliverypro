@@ -10,7 +10,7 @@ const nextConfig: NextConfig = {
   // Allow Server Actions on production Vercel domains and local dev
   experimental: {
     serverActions: {
-      allowedOrigins: ['localhost:3000', '*.vercel.app'],
+      allowedOrigins: ['localhost:3000', '*.vercel.app', 'sourcedeliverypro.com', '*.sourcedeliverypro.com', 'www.sourcedeliverypro.com'],
     },
   },
   images: {
