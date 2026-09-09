@@ -335,7 +335,7 @@ function TrackingContent() {
           <div className="absolute -bottom-20 right-0 w-80 h-80 rounded-full bg-[#6B2737]/10 blur-3xl" />
         </div>
 
-        <div className="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-20 text-center">
+        <div className={`relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center transition-all ${data ? 'py-10 sm:py-14' : 'py-20'}`}>
           {/* Live badge */}
           <div className="inline-flex items-center gap-2 bg-white/10 text-white/80 text-xs font-semibold px-4 py-2 rounded-full mb-6 border border-white/20 backdrop-blur-sm">
             <span className="relative flex h-2 w-2">
@@ -352,35 +352,46 @@ function TrackingContent() {
             Real-time visibility into every leg of your SourceDeliveryPro delivery — from pickup to proof of delivery.
           </p>
 
-          {/* Search bar */}
-          <form onSubmit={handleSubmit} className="mt-10 flex flex-col sm:flex-row gap-3 max-w-2xl mx-auto">
-            <div className="relative flex-1">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none" />
-              <input
-                type="text"
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value.toUpperCase())}
-                placeholder="Enter AWB or tracking number…"
-                className="w-full pl-12 pr-4 py-4 rounded-xl bg-white text-[#1B2A4A] font-mono text-sm sm:text-base tracking-widest placeholder:tracking-normal placeholder:font-sans placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#6B2737] shadow-lg"
-                required
-                autoComplete="off"
-                spellCheck={false}
-              />
+          {/* Search bar — removed when a package is being actively tracked */}
+          {!data && (
+            <form onSubmit={handleSubmit} className="mt-10 flex flex-col sm:flex-row gap-3 max-w-2xl mx-auto">
+              <div className="relative flex-1">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none" />
+                <input
+                  type="text"
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value.toUpperCase())}
+                  placeholder="Enter AWB or tracking number…"
+                  className="w-full pl-12 pr-4 py-4 rounded-xl bg-white text-[#1B2A4A] font-mono text-sm sm:text-base tracking-widest placeholder:tracking-normal placeholder:font-sans placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#6B2737] shadow-lg"
+                  required
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={loading}
+                className="inline-flex items-center justify-center gap-2 px-8 py-4 rounded-xl bg-[#6B2737] hover:bg-[#7d2f41] active:bg-[#5a1f2d] text-white font-bold text-sm sm:text-base transition-colors shadow-lg disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
+              >
+                {loading ? (
+                  <><RefreshCw className="w-4 h-4 animate-spin" />Tracking…</>
+                ) : (
+                  <><Truck className="w-4 h-4" />Track</>
+                )}
+              </button>
+            </form>
+          )}
+
+          {data && (
+            <div className="mt-6 flex items-center justify-center gap-3">
+              <button
+                onClick={() => { setInputValue(''); setData(null); setError(null) }}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-semibold backdrop-blur-sm border border-white/20 transition-colors shadow-sm"
+              >
+                <Search className="w-3.5 h-3.5" /> Track Another Consignment
+              </button>
             </div>
-            <button
-              type="submit"
-              disabled={loading}
-              className="inline-flex items-center justify-center gap-2 px-8 py-4 rounded-xl bg-[#6B2737] hover:bg-[#7d2f41] active:bg-[#5a1f2d] text-white font-bold text-sm sm:text-base transition-colors shadow-lg disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
-            >
-              {loading ? (
-                <><RefreshCw className="w-4 h-4 animate-spin" />Tracking…</>
-              ) : (
-                <><Truck className="w-4 h-4" />Track</>
-              )}
-            </button>
-          </form>
-
-
+          )}
         </div>
       </section>
 
@@ -496,67 +507,7 @@ function TrackingContent() {
               </div>
             )}
 
-            {/* ── 2. Map Section Followed After Timeline ──────────────────── */}
-            {data.showMap !== false && finalMapQuery && (
-              <div className="bg-[#1B2A4A] rounded-2xl overflow-hidden shadow-lg">
-                <div className="px-6 py-4 flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <MapPin className="w-4 h-4 text-[#6B2737]" />
-                    <p className="text-white/80 text-sm font-medium">
-                      📍 Current Location:{' '}
-                      <span className="text-white font-bold">{data.currentLocation || finalMapQuery}</span>
-                    </p>
-                  </div>
-                  <span className="text-[10px] uppercase tracking-wider font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                    Live GPS Telemetry
-                  </span>
-                </div>
-                <div className="relative w-full h-[400px] bg-[#0f1e36]">
-                  {!mapLoaded && (
-                    <div className="absolute inset-0 flex items-center justify-center z-10">
-                      <div className="text-center">
-                        <RefreshCw className="w-6 h-6 text-white/40 animate-spin mx-auto mb-2" />
-                        <p className="text-white/40 text-xs">Loading map…</p>
-                      </div>
-                    </div>
-                  )}
-                  <iframe
-                    title="Shipment Location Map"
-                    src={buildMapUrl(data.mapQuery || finalMapQuery)}
-                    width="100%"
-                    height="400"
-                    className="w-full h-full border-0"
-                    loading="lazy"
-                    referrerPolicy="no-referrer-when-downgrade"
-                    onLoad={() => setMapLoaded(true)}
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* When map is toggled off, display verified location badge */}
-            {data.showMap === false && (
-              <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white" style={{ background: '#1B2A4A' }}>
-                    <MapPin className="w-5 h-5 text-[#C27F88]" />
-                  </div>
-                  <div>
-                    <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold block">
-                      Verified Checkpoint Location
-                    </span>
-                    <span className="font-bold text-sm text-[#1B2A4A]">
-                      {data.currentLocation || data.originCity}
-                    </span>
-                  </div>
-                </div>
-                <span className="text-[11px] font-semibold text-emerald-700 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200">
-                  Telemetry Confirmed
-                </span>
-              </div>
-            )}
-
-            {/* ── 3. Tracking Number / Shipment Details Card ──────────────── */}
+            {/* ── 2. Tracking Number / Shipment Details Card ──────────────── */}
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm border-t-4 border-t-[#6B2737] overflow-hidden">
               <div className="p-6 sm:p-8">
                 {/* Top row */}
@@ -656,6 +607,66 @@ function TrackingContent() {
                     {formatTimestamp(data.proofOfDelivery.deliveredAt)}.
                   </p>
                 </div>
+              </div>
+            )}
+
+            {/* ── 3. Map Section Moved to Bottom ──────────────────────────── */}
+            {data.showMap !== false && finalMapQuery && (
+              <div className="bg-[#1B2A4A] rounded-2xl overflow-hidden shadow-lg">
+                <div className="px-6 py-4 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <MapPin className="w-4 h-4 text-[#6B2737]" />
+                    <p className="text-white/80 text-sm font-medium">
+                      📍 Current Location:{' '}
+                      <span className="text-white font-bold">{data.currentLocation || finalMapQuery}</span>
+                    </p>
+                  </div>
+                  <span className="text-[10px] uppercase tracking-wider font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                    Live GPS Telemetry
+                  </span>
+                </div>
+                <div className="relative w-full h-[400px] bg-[#0f1e36]">
+                  {!mapLoaded && (
+                    <div className="absolute inset-0 flex items-center justify-center z-10">
+                      <div className="text-center">
+                        <RefreshCw className="w-6 h-6 text-white/40 animate-spin mx-auto mb-2" />
+                        <p className="text-white/40 text-xs">Loading map…</p>
+                      </div>
+                    </div>
+                  )}
+                  <iframe
+                    title="Shipment Location Map"
+                    src={buildMapUrl(data.mapQuery || finalMapQuery)}
+                    width="100%"
+                    height="400"
+                    className="w-full h-full border-0"
+                    loading="lazy"
+                    referrerPolicy="no-referrer-when-downgrade"
+                    onLoad={() => setMapLoaded(true)}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* When map is toggled off, display verified location badge */}
+            {data.showMap === false && (
+              <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white" style={{ background: '#1B2A4A' }}>
+                    <MapPin className="w-5 h-5 text-[#C27F88]" />
+                  </div>
+                  <div>
+                    <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold block">
+                      Verified Checkpoint Location
+                    </span>
+                    <span className="font-bold text-sm text-[#1B2A4A]">
+                      {data.currentLocation || data.originCity}
+                    </span>
+                  </div>
+                </div>
+                <span className="text-[11px] font-semibold text-emerald-700 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200">
+                  Telemetry Confirmed
+                </span>
               </div>
             )}
 
