@@ -20,6 +20,19 @@ const nextConfig: NextConfig = {
       { protocol: 'https', hostname: 'avatars.githubusercontent.com' },
     ],
   },
+  redirects: async () => [
+    {
+      source: '/:path*',
+      has: [
+        {
+          type: 'host',
+          value: '(.*)\\.vercel\\.app',
+        },
+      ],
+      destination: 'https://www.sourcedeliverypro.com/:path*',
+      permanent: true,
+    },
+  ],
   headers: async () => [
     {
       source: '/(.*)',

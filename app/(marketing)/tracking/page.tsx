@@ -369,7 +369,162 @@ function TrackingContent() {
         {/* Results */}
         {data && statusCfg && (
           <div className="space-y-6">
-            {/* ── Package Info Card ───────────────────────────────────────── */}
+            {/* ── 1. Shipment Timeline First ────────────────────────────────── */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm border-t-4 border-t-[#6B2737] p-6 sm:p-8">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6 pb-4 border-b border-slate-100">
+                <h3 className="text-lg font-black text-[#1B2A4A] flex items-center gap-2">
+                  <Clock className="w-5 h-5 text-[#6B2737]" />
+                  Shipment Timeline
+                </h3>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-mono text-xs font-bold text-[#1B2A4A] bg-slate-100 border border-slate-200 px-3 py-1 rounded-md">
+                    AWB: {data.trackingNumber}
+                  </span>
+                  <span className={`inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-full border ${statusCfg.bg} ${statusCfg.text} ${statusCfg.border}`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${statusCfg.dot}`} />
+                    {statusCfg.label}
+                  </span>
+                </div>
+              </div>
+              {data.events.length === 0 ? (
+                <p className="text-sm text-slate-400">Shipment order received. Awaiting initial scan at dispatch hub.</p>
+              ) : (
+                <div className="relative pl-7 space-y-8">
+                  <div className="absolute left-2.5 top-2 bottom-2 w-0.5 bg-slate-200" />
+                  {data.events.map((evt, idx) => (
+                    <div key={evt.id} className="relative">
+                      <div
+                        className={`absolute -left-7 top-1 w-5 h-5 rounded-full border-2 border-white flex items-center justify-center shadow-sm ${
+                          idx === 0 ? 'bg-[#6B2737]' : 'bg-slate-200'
+                        }`}
+                      >
+                        {idx === 0 && <div className="w-1.5 h-1.5 rounded-full bg-white/80" />}
+                      </div>
+                      <div
+                        className={`rounded-xl p-4 ${
+                          idx === 0
+                            ? 'bg-[#6B2737]/5 border border-[#6B2737]/20'
+                            : 'bg-slate-50/80 border border-slate-100'
+                        }`}
+                      >
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-1">
+                          <p className={`font-bold text-sm ${idx === 0 ? 'text-[#6B2737]' : 'text-[#1B2A4A]'}`}>
+                            {evt.description}
+                          </p>
+                          <span className="text-xs text-slate-400 font-mono shrink-0">
+                            {formatTimestamp(evt.timestamp)}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-500 flex items-center gap-1.5 mt-1">
+                          <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
+                          {evt.facilityName ? `${evt.facilityName} — ` : ''}
+                          {evt.city || evt.location || 'Hub Facility'}
+                          {evt.country ? `, ${evt.country}` : ''}
+                        </p>
+                        <span className="inline-block mt-2 text-[10px] font-bold uppercase tracking-wider text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
+                          {evt.status.replace(/_/g, ' ')}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* ── Official Remarks Section ─────────────────────────────────── */}
+            {data.remarks && data.remarks.filter((r: any) => r.public !== false).length > 0 && (
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm border-t-4 border-t-amber-500 p-6 sm:p-8 space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <h3 className="text-base font-black text-[#1B2A4A] flex items-center gap-2">
+                    <MessageSquare className="w-5 h-5 text-amber-500" />
+                    Official Consignment Remarks &amp; Updates
+                  </h3>
+                  <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
+                    Operations Log
+                  </span>
+                </div>
+                <div className="space-y-3">
+                  {data.remarks
+                    .filter((r: any) => r.public !== false)
+                    .map((rem: any) => (
+                      <div key={rem.id} className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1.5">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-bold px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 text-[10px] uppercase tracking-wider">
+                            {rem.category || 'Operational Remark'}
+                          </span>
+                          <span className="text-slate-400 text-[11px]">{formatTimestamp(rem.timestamp)}</span>
+                        </div>
+                        <p className="text-slate-700 text-xs sm:text-sm leading-relaxed font-medium">
+                          {rem.text}
+                        </p>
+                        <p className="text-[10px] text-slate-400">Recorded by: {rem.author || 'Operations Admin'}</p>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
+
+            {/* ── 2. Map Section Followed After Timeline ──────────────────── */}
+            {data.showMap !== false && finalMapQuery && (
+              <div className="bg-[#1B2A4A] rounded-2xl overflow-hidden shadow-lg">
+                <div className="px-6 py-4 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <MapPin className="w-4 h-4 text-[#6B2737]" />
+                    <p className="text-white/80 text-sm font-medium">
+                      📍 Current Location:{' '}
+                      <span className="text-white font-bold">{data.currentLocation || finalMapQuery}</span>
+                    </p>
+                  </div>
+                  <span className="text-[10px] uppercase tracking-wider font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                    Live GPS Telemetry
+                  </span>
+                </div>
+                <div className="relative w-full h-[400px] bg-[#0f1e36]">
+                  {!mapLoaded && (
+                    <div className="absolute inset-0 flex items-center justify-center z-10">
+                      <div className="text-center">
+                        <RefreshCw className="w-6 h-6 text-white/40 animate-spin mx-auto mb-2" />
+                        <p className="text-white/40 text-xs">Loading map…</p>
+                      </div>
+                    </div>
+                  )}
+                  <iframe
+                    title="Shipment Location Map"
+                    src={buildMapUrl(data.mapQuery || finalMapQuery)}
+                    width="100%"
+                    height="400"
+                    className="w-full h-full border-0"
+                    loading="lazy"
+                    referrerPolicy="no-referrer-when-downgrade"
+                    onLoad={() => setMapLoaded(true)}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* When map is toggled off, display verified location badge */}
+            {data.showMap === false && (
+              <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white" style={{ background: '#1B2A4A' }}>
+                    <MapPin className="w-5 h-5 text-[#C27F88]" />
+                  </div>
+                  <div>
+                    <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold block">
+                      Verified Checkpoint Location
+                    </span>
+                    <span className="font-bold text-sm text-[#1B2A4A]">
+                      {data.currentLocation || data.originCity}
+                    </span>
+                  </div>
+                </div>
+                <span className="text-[11px] font-semibold text-emerald-700 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200">
+                  Telemetry Confirmed
+                </span>
+              </div>
+            )}
+
+            {/* ── 3. Tracking Number / Shipment Details Card ──────────────── */}
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm border-t-4 border-t-[#6B2737] overflow-hidden">
               <div className="p-6 sm:p-8">
                 {/* Top row */}
@@ -458,7 +613,7 @@ function TrackingContent() {
               </div>
             </div>
 
-            {/* ── Proof of Delivery ───────────────────────────────────────── */}
+            {/* ── Proof of Delivery (if present) ──────────────────────────── */}
             {data.hasProofOfDelivery && data.proofOfDelivery && (
               <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-5 flex items-start gap-3">
                 <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
@@ -471,150 +626,6 @@ function TrackingContent() {
                 </div>
               </div>
             )}
-
-            {/* ── Map Section (Toggleable by Admin) ───────────────────────── */}
-            {data.showMap !== false && finalMapQuery && (
-              <div className="bg-[#1B2A4A] rounded-2xl overflow-hidden shadow-lg">
-                <div className="px-6 py-4 flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <MapPin className="w-4 h-4 text-[#6B2737]" />
-                    <p className="text-white/80 text-sm font-medium">
-                      📍 Current Location:{' '}
-                      <span className="text-white font-bold">{data.currentLocation || finalMapQuery}</span>
-                    </p>
-                  </div>
-                  <span className="text-[10px] uppercase tracking-wider font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                    Live GPS Telemetry
-                  </span>
-                </div>
-                <div className="relative w-full h-[400px] bg-[#0f1e36]">
-                  {!mapLoaded && (
-                    <div className="absolute inset-0 flex items-center justify-center z-10">
-                      <div className="text-center">
-                        <RefreshCw className="w-6 h-6 text-white/40 animate-spin mx-auto mb-2" />
-                        <p className="text-white/40 text-xs">Loading map…</p>
-                      </div>
-                    </div>
-                  )}
-                  <iframe
-                    title="Shipment Location Map"
-                    src={buildMapUrl(data.mapQuery || finalMapQuery)}
-                    width="100%"
-                    height="400"
-                    className="w-full h-full border-0"
-                    loading="lazy"
-                    referrerPolicy="no-referrer-when-downgrade"
-                    onLoad={() => setMapLoaded(true)}
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* When map is toggled off, display verified location badge */}
-            {data.showMap === false && (
-              <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white" style={{ background: '#1B2A4A' }}>
-                    <MapPin className="w-5 h-5 text-[#C27F88]" />
-                  </div>
-                  <div>
-                    <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold block">
-                      Verified Checkpoint Location
-                    </span>
-                    <span className="font-bold text-sm text-[#1B2A4A]">
-                      {data.currentLocation || data.originCity}
-                    </span>
-                  </div>
-                </div>
-                <span className="text-[11px] font-semibold text-emerald-700 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200">
-                  Telemetry Confirmed
-                </span>
-              </div>
-            )}
-
-            {/* ── Official Remarks Section ─────────────────────────────────── */}
-            {data.remarks && data.remarks.filter((r: any) => r.public !== false).length > 0 && (
-              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm border-t-4 border-t-amber-500 p-6 sm:p-8 space-y-4">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                  <h3 className="text-base font-black text-[#1B2A4A] flex items-center gap-2">
-                    <MessageSquare className="w-5 h-5 text-amber-500" />
-                    Official Consignment Remarks &amp; Updates
-                  </h3>
-                  <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
-                    Operations Log
-                  </span>
-                </div>
-                <div className="space-y-3">
-                  {data.remarks
-                    .filter((r: any) => r.public !== false)
-                    .map((rem: any) => (
-                      <div key={rem.id} className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1.5">
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="font-bold px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 text-[10px] uppercase tracking-wider">
-                            {rem.category || 'Operational Remark'}
-                          </span>
-                          <span className="text-slate-400 text-[11px]">{formatTimestamp(rem.timestamp)}</span>
-                        </div>
-                        <p className="text-slate-700 text-xs sm:text-sm leading-relaxed font-medium">
-                          {rem.text}
-                        </p>
-                        <p className="text-[10px] text-slate-400">Recorded by: {rem.author || 'Operations Admin'}</p>
-                      </div>
-                    ))}
-                </div>
-              </div>
-            )}
-
-            {/* ── Timeline ────────────────────────────────────────────────── */}
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm border-t-4 border-t-[#6B2737] p-6 sm:p-8">
-              <h3 className="text-lg font-black text-[#1B2A4A] mb-6 flex items-center gap-2">
-                <Clock className="w-5 h-5 text-[#6B2737]" />
-                Shipment Timeline
-              </h3>
-              {data.events.length === 0 ? (
-                <p className="text-sm text-slate-400">Shipment order received. Awaiting initial scan at dispatch hub.</p>
-              ) : (
-                <div className="relative pl-7 space-y-8">
-                  <div className="absolute left-2.5 top-2 bottom-2 w-0.5 bg-slate-200" />
-                  {data.events.map((evt, idx) => (
-                    <div key={evt.id} className="relative">
-                      <div
-                        className={`absolute -left-7 top-1 w-5 h-5 rounded-full border-2 border-white flex items-center justify-center shadow-sm ${
-                          idx === 0 ? 'bg-[#6B2737]' : 'bg-slate-200'
-                        }`}
-                      >
-                        {idx === 0 && <div className="w-1.5 h-1.5 rounded-full bg-white/80" />}
-                      </div>
-                      <div
-                        className={`rounded-xl p-4 ${
-                          idx === 0
-                            ? 'bg-[#6B2737]/5 border border-[#6B2737]/20'
-                            : 'bg-slate-50/80 border border-slate-100'
-                        }`}
-                      >
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-1">
-                          <p className={`font-bold text-sm ${idx === 0 ? 'text-[#6B2737]' : 'text-[#1B2A4A]'}`}>
-                            {evt.description}
-                          </p>
-                          <span className="text-xs text-slate-400 font-mono shrink-0">
-                            {formatTimestamp(evt.timestamp)}
-                          </span>
-                        </div>
-                        <p className="text-xs text-slate-500 flex items-center gap-1.5 mt-1">
-                          <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
-                          {evt.facilityName ? `${evt.facilityName} — ` : ''}
-                          {evt.city || evt.location || 'Hub Facility'}
-                          {evt.country ? `, ${evt.country}` : ''}
-                        </p>
-                        <span className="inline-block mt-2 text-[10px] font-bold uppercase tracking-wider text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
-                          {evt.status.replace(/_/g, ' ')}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
 
             {/* ── Action bar ──────────────────────────────────────────────── */}
             <div className="flex flex-wrap gap-3 justify-end">
