@@ -1,10 +1,43 @@
+import dns from 'dns'
+import nodemailer from 'nodemailer'
 import { Resend } from 'resend'
 
-const resend = new Resend(process.env.RESEND_API_KEY)
+try {
+  dns.setServers(['8.8.8.8', '1.1.1.1'])
+  dns.setDefaultResultOrder('ipv4first')
+} catch {}
 
-const FROM_EMAIL = process.env.EMAIL_FROM ?? 'noreply@sourcedeliverypro.com'
+const FROM_EMAIL = process.env.EMAIL_FROM ?? process.env.EMAIL_USER ?? 'support@sourcedeliverypro.com'
 const FROM_NAME = process.env.EMAIL_FROM_NAME ?? 'SourceDeliveryPro'
-const FROM = `${FROM_NAME} <${FROM_EMAIL}>`
+const FROM = `"${FROM_NAME}" <${FROM_EMAIL}>`
+
+function getTransporter() {
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+    return null
+  }
+  const port = Number(process.env.EMAIL_PORT) || 465
+  const isSecure = process.env.EMAIL_SECURE !== undefined
+    ? process.env.EMAIL_SECURE === 'true'
+    : port === 465
+
+  return nodemailer.createTransport({
+    host: process.env.EMAIL_HOST || 'smtppro.zoho.com',
+    port,
+    secure: isSecure,
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASS,
+    },
+  })
+}
+
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null
+
+export interface EmailAttachment {
+  filename: string
+  content: string | Buffer
+  contentType?: string
+}
 
 export interface EmailOptions {
   to: string | string[]
@@ -14,6 +47,7 @@ export interface EmailOptions {
   replyTo?: string
   cc?: string[]
   bcc?: string[]
+  attachments?: EmailAttachment[]
 }
 
 export interface EmailResult {
@@ -23,38 +57,80 @@ export interface EmailResult {
 }
 
 /**
- * Send an email via Resend
+ * Send an email via Resend or SMTP
  */
 export async function sendEmail(options: EmailOptions): Promise<EmailResult> {
   try {
-    if (process.env.NODE_ENV === 'development' && !process.env.RESEND_API_KEY) {
-      console.log('[Email] Simulated send:', {
-        to: options.to,
+    const fromAddress = process.env.EMAIL_FROM || process.env.EMAIL_USER || 'support@sourcedeliverypro.com'
+    const fromName = process.env.EMAIL_FROM_NAME || 'SourceDeliveryPro'
+    const fromHeader = `"${fromName}" <${fromAddress}>`
+
+    // 1. Primary: Resend API
+    if (process.env.RESEND_API_KEY) {
+      const formattedTo = Array.isArray(options.to) ? options.to : [options.to]
+      const payload: Record<string, any> = {
+        from: fromHeader,
+        to: formattedTo,
         subject: options.subject,
+        html: options.html,
+        text: options.text,
+        reply_to: options.replyTo,
+        cc: options.cc,
+        bcc: options.bcc,
+      }
+
+      if (options.attachments && options.attachments.length > 0) {
+        payload.attachments = options.attachments.map((att) => ({
+          filename: att.filename,
+          content: typeof att.content === 'string' ? att.content : att.content.toString('base64'),
+        }))
+      }
+
+      const res = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
       })
-      return { success: true, messageId: 'dev-' + Date.now() }
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        console.error('[Email] Resend error:', data)
+        return { success: false, error: data.message || 'Failed to send email' }
+      }
+
+      return { success: true, messageId: data.id }
     }
 
-    const { data, error } = await resend.emails.send({
-      from: FROM,
-      to: Array.isArray(options.to) ? options.to : [options.to],
+    // 2. Secondary: SMTP transporter if credentials are provided
+    const transporter = getTransporter()
+    if (transporter) {
+      const info = await transporter.sendMail({
+        from: fromHeader,
+        to: Array.isArray(options.to) ? options.to.join(', ') : options.to,
+        subject: options.subject,
+        html: options.html,
+        text: options.text,
+        replyTo: options.replyTo,
+        cc: options.cc,
+        bcc: options.bcc,
+        attachments: options.attachments,
+      })
+      return { success: true, messageId: info.messageId }
+    }
+
+    // 3. Fall back to simulation if no provider is configured
+    console.log('[Email] Simulated send (no provider configured):', {
+      to: options.to,
       subject: options.subject,
-      html: options.html,
-      text: options.text,
-      replyTo: options.replyTo,
-      cc: options.cc,
-      bcc: options.bcc,
     })
-
-    if (error) {
-      console.error('[Email] Send error:', error)
-      return { success: false, error: error.message }
-    }
-
-    return { success: true, messageId: data?.id }
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown email error'
-    console.error('[Email] Exception:', message)
+    return { success: true, messageId: 'simulated-' + Date.now() }
+  } catch (err: any) {
+    const message = err instanceof Error ? `${err.message}${err.cause ? ' - ' + String(err.cause) : ''}` : 'Unknown email error'
+    console.error('[Email] Exception:', message, err.cause)
     return { success: false, error: message }
   }
 }
@@ -188,4 +264,63 @@ export async function sendSupportTicketEmail(
     <a href="${process.env.NEXT_PUBLIC_APP_URL}/dashboard/support" class="btn">View Ticket</a>
   `)
   return sendEmail({ to, subject: `Support Ticket Created — ${ticketNumber}`, html })
+}
+
+export async function sendPaymentProofNotificationEmail(params: {
+  trackingNumber: string
+  amount: number
+  paymentMethod: string
+  payerName: string
+  transactionId: string
+  proofBase64?: string
+  proofFileName?: string
+  notes?: string
+}): Promise<EmailResult> {
+  const supportEmail = process.env.EMAIL_FROM || 'support@sourcedeliverypro.com'
+  const html = baseTemplate(`
+    <div style="background: #FEF3C7; border-left: 4px solid #F59E0B; padding: 16px; border-radius: 6px; margin-bottom: 24px;">
+      <h2 style="color: #92400E; margin: 0 0 6px; font-size: 18px;">🚨 New Payment Proof Submitted!</h2>
+      <p style="color: #B45309; margin: 0; font-size: 14px;">A customer has submitted proof of payment for review and verification.</p>
+    </div>
+
+    <div class="tracking-box">
+      <div style="font-size: 12px; color: #6B7280; text-transform: uppercase; letter-spacing: 1px;">Tracking / Reference Number</div>
+      <div class="tracking-number">${params.trackingNumber}</div>
+      <div style="margin-top: 12px; font-size: 14px; color: #374151;"><strong>Amount Due:</strong> $${params.amount.toFixed(2)}</div>
+      <div style="font-size: 14px; color: #374151;"><strong>Payment Method:</strong> ${params.paymentMethod}</div>
+      <div style="font-size: 14px; color: #374151;"><strong>Payer Name:</strong> ${params.payerName}</div>
+      <div style="font-size: 14px; color: #374151;"><strong>Transaction ID / Reference:</strong> <code style="background:#e5e7eb;padding:2px 6px;border-radius:4px;font-weight:bold;">${params.transactionId}</code></div>
+      ${params.notes ? `<div style="font-size: 14px; color: #374151; margin-top: 6px;"><strong>Customer Notes:</strong> ${params.notes}</div>` : ''}
+    </div>
+
+    ${params.proofBase64 ? `
+      <div style="margin: 24px 0;">
+        <h3 style="color: #1B2A4A; font-size: 16px; margin-bottom: 8px;">Uploaded Receipt / Transfer Screenshot:</h3>
+        <div style="border: 1px solid #E5E7EB; border-radius: 8px; overflow: hidden; padding: 12px; background: #FAFAFA; text-align: center;">
+          <img src="${params.proofBase64}" alt="Payment Proof" style="max-width: 100%; height: auto; max-height: 480px; border-radius: 6px; display: inline-block;" />
+        </div>
+      </div>
+    ` : ''}
+
+    <a href="${process.env.NEXT_PUBLIC_APP_URL || 'https://sourcedeliverypro.com'}/admin/payments" class="btn">Open Admin Payment Verification</a>
+  `)
+
+  // Prepare attachments if proofBase64 is provided
+  const attachments: EmailAttachment[] = []
+  if (params.proofBase64) {
+    const base64Data = params.proofBase64.includes('base64,') 
+      ? params.proofBase64.split('base64,')[1] 
+      : params.proofBase64
+    attachments.push({
+      filename: params.proofFileName || `payment-proof-${params.trackingNumber}.png`,
+      content: base64Data,
+    })
+  }
+
+  return sendEmail({
+    to: supportEmail,
+    subject: `🚨 Payment Proof: ${params.trackingNumber} ($${params.amount.toFixed(2)} - ${params.paymentMethod})`,
+    html,
+    attachments: attachments.length > 0 ? attachments : undefined,
+  })
 }

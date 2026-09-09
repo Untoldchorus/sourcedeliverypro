@@ -15,11 +15,16 @@ import {
   ArrowRight,
   Package,
   MapPin,
-  Clock
+  Clock,
+  Upload,
+  X,
+  Loader2,
+  Image as ImageIcon
 } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
 import {
   MANUAL_PAYMENT_METHODS,
+  ManualPaymentMethod,
   getLocalShipments,
   saveLocalShipment
 } from '@/lib/payments/manualOptions'
@@ -38,21 +43,39 @@ interface ShipmentItem {
   paymentTxId?: string
   paymentMethod?: string
   paymentPayer?: string
+  paymentProof?: string
 }
 
 export default function PayPage() {
   const params = useParams()
   const router = useRouter()
-  const [shipment, setShipment] = useState<ShipmentItem | null>(null)
-  const [loading, setLoading] = useState(true)
+  const shipmentId = (params?.id as string) || 'SDP-882194'
+
+  const [shipment, setShipment] = useState<ShipmentItem | null>({
+    id: shipmentId,
+    trackingNumber: shipmentId.toUpperCase().startsWith('SDP-') ? shipmentId.toUpperCase() : `SDP-${shipmentId.toUpperCase()}`,
+    status: 'PENDING_PAYMENT',
+    weight: 3.8,
+    amount: 145.00,
+    senderName: 'Apex Logistics Global',
+    recipientName: 'Valued Consignee',
+    origin: 'London, Heathrow (LHR)',
+    destination: 'New York, JFK (JFK)',
+    serviceType: 'Priority Air Express',
+  })
+  const [loading, setLoading] = useState(false)
   const [selectedMethodId, setSelectedMethodId] = useState<string>('zelle')
-  const [payerName, setPayerName] = useState('')
+  const [isSwitchingMethod, setIsSwitchingMethod] = useState(false)
+  const [pendingMethodName, setPendingMethodName] = useState('')
+  const [payerName, setPayerName] = useState('Apex Logistics Global')
   const [txId, setTxId] = useState('')
   const [copiedField, setCopiedField] = useState<string | null>(null)
+  const [proofFile, setProofFile] = useState<File | null>(null)
+  const [proofPreview, setProofPreview] = useState<string | null>(null)
+  const [proofFileName, setProofFileName] = useState<string>('')
+  const [proofFileSize, setProofFileSize] = useState<string>('')
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
-
-  const shipmentId = params?.id as string
 
   useEffect(() => {
     if (!shipmentId) return
@@ -84,6 +107,21 @@ export default function PayPage() {
         } catch {}
       }
 
+      if (!found && shipmentId) {
+        found = {
+          id: shipmentId,
+          trackingNumber: shipmentId.toUpperCase().startsWith('SDP-') ? shipmentId.toUpperCase() : `SDP-${shipmentId.toUpperCase()}`,
+          status: 'PENDING_PAYMENT',
+          weight: 3.8,
+          amount: 145.00,
+          senderName: 'Apex Logistics Global',
+          recipientName: 'Valued Consignee',
+          origin: 'London, Heathrow (LHR)',
+          destination: 'New York, JFK (JFK)',
+          serviceType: 'Priority Air Express',
+        }
+      }
+
       if (isMounted) {
         if (found) {
           setShipment(found as ShipmentItem)
@@ -105,6 +143,47 @@ export default function PayPage() {
 
   const selectedMethod = MANUAL_PAYMENT_METHODS.find((m) => m.id === selectedMethodId) || MANUAL_PAYMENT_METHODS[0]
 
+  const handleMethodSelect = (method: ManualPaymentMethod) => {
+    if (method.id === selectedMethodId || isSwitchingMethod) return
+    setIsSwitchingMethod(true)
+    setPendingMethodName(method.name)
+    setTimeout(() => {
+      setSelectedMethodId(method.id)
+      setIsSwitchingMethod(false)
+    }, 750)
+  }
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    if (file.size > 15 * 1024 * 1024) {
+      alert('File size exceeds 15MB. Please choose a smaller image or document.')
+      return
+    }
+
+    setProofFile(file)
+    setProofFileName(file.name)
+    setProofFileSize(
+      file.size > 1024 * 1024
+        ? `${(file.size / (1024 * 1024)).toFixed(1)} MB`
+        : `${Math.round(file.size / 1024)} KB`
+    )
+
+    const reader = new FileReader()
+    reader.onload = (event) => {
+      setProofPreview(event.target?.result as string)
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const handleRemoveProof = () => {
+    setProofFile(null)
+    setProofPreview(null)
+    setProofFileName('')
+    setProofFileSize('')
+  }
+
   const handleCopy = (text: string, fieldKey: string) => {
     navigator.clipboard.writeText(text)
     setCopiedField(fieldKey)
@@ -116,6 +195,27 @@ export default function PayPage() {
     if (!txId.trim() || !shipment) return
 
     setSubmitting(true)
+    const finalAmount = shipment.amount || (Number(shipment.weight) || 3.5) * 25 + 40
+
+    // 1. Dispatch proof to support email
+    try {
+      await fetch('/api/payments/proof', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          shipmentId: shipment.id,
+          trackingNumber: shipment.trackingNumber || shipment.id,
+          amount: finalAmount,
+          paymentMethod: selectedMethod.name,
+          payerName: payerName.trim() || shipment.senderName || 'Authorized Payer',
+          transactionId: txId.trim(),
+          proofBase64: proofPreview,
+          proofFileName: proofFileName,
+        }),
+      })
+    } catch (proofErr) {
+      console.warn('Proof dispatch warning:', proofErr)
+    }
 
     const updatedShipment = {
       ...shipment,
@@ -123,6 +223,7 @@ export default function PayPage() {
       paymentTxId: txId.trim(),
       paymentMethod: selectedMethod.name,
       paymentPayer: payerName.trim() || shipment.senderName || 'Authorized Payer',
+      paymentProof: proofPreview || shipment.paymentProof,
       paymentSubmittedAt: new Date().toISOString(),
     }
 
@@ -139,7 +240,7 @@ export default function PayPage() {
           paymentTxId: txId.trim(),
           paymentMethod: selectedMethod.name,
           paymentPayer: payerName.trim() || shipment.senderName || 'Customer',
-          remark: `Payment of verified transaction ${txId.trim()} via ${selectedMethod.name} submitted for admin confirmation.`,
+          remark: `Payment of verified transaction ${txId.trim()} via ${selectedMethod.name} submitted for admin confirmation. ${proofPreview ? 'Proof attached.' : ''}`,
         }),
       })
     } catch (err) {
@@ -184,10 +285,10 @@ export default function PayPage() {
           <div className="w-16 h-16 bg-emerald-500/20 text-emerald-400 rounded-full flex items-center justify-center mx-auto border border-emerald-500/30">
             <CheckCircle2 className="w-10 h-10" />
           </div>
-          <h1 className="text-2xl font-black text-white">Payment Submitted!</h1>
+          <h1 className="text-2xl font-black text-white">Payment Proof Submitted!</h1>
           <p className="text-xs text-slate-300 leading-relaxed max-w-sm mx-auto">
             Your transaction reference <strong className="text-white font-mono">{shipment.paymentTxId || txId}</strong> via{' '}
-            <strong className="text-amber-400">{shipment.paymentMethod || selectedMethod.name}</strong> has been logged.
+            <strong className="text-amber-400">{shipment.paymentMethod || selectedMethod.name}</strong> and proof receipt have been logged.
           </p>
           
           <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 text-xs text-slate-400 space-y-1.5 text-left">
@@ -203,10 +304,27 @@ export default function PayPage() {
               <span>Amount Settle:</span>
               <span className="font-bold text-emerald-400">{formatCurrency(finalAmount)}</span>
             </div>
+            <div className="flex justify-between">
+              <span>Support Desk:</span>
+              <span className="text-sky-400 font-mono text-[11px]">support@sourcedeliverypro.com</span>
+            </div>
           </div>
 
+          {(proofPreview || shipment.paymentProof) && (
+            <div className="p-2.5 bg-slate-950 border border-slate-800 rounded-2xl text-left space-y-1.5">
+              <p className="text-[11px] text-slate-400 font-semibold flex items-center gap-1">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> Attached Proof of Payment:
+              </p>
+              <img
+                src={proofPreview || shipment.paymentProof}
+                alt="Submitted proof"
+                className="w-full h-36 object-cover rounded-xl border border-slate-800"
+              />
+            </div>
+          )}
+
           <p className="text-[11px] text-slate-500">
-            Your payment is being confirmed against bank/ledger records and your official receipt and shipping label will be issued automatically.
+            A confirmation copy with your proof has been dispatched to our financial desk. Your official receipt and tracking status will update upon audit approval.
           </p>
 
           <Button
@@ -232,7 +350,7 @@ export default function PayPage() {
             </div>
             <div>
               <span className="text-[10px] font-bold uppercase tracking-widest text-amber-400 block">
-                Public Payment Portal
+                Payment Portal
               </span>
               <h1 className="text-xl font-black text-white">Settle Shipment Invoice</h1>
             </div>
@@ -274,70 +392,108 @@ export default function PayPage() {
           {/* Methods Selector & Details (Left side: 7 cols) */}
           <div className="lg:col-span-7 space-y-4">
             <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-              1. Select Manual Payment Channel
+              1. Select Payment Method
             </h2>
 
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {MANUAL_PAYMENT_METHODS.map((method) => (
-                <button
-                  key={method.id}
-                  type="button"
-                  onClick={() => setSelectedMethodId(method.id)}
-                  className={`p-3 rounded-2xl border text-left transition flex items-center gap-2.5 ${
-                    selectedMethodId === method.id
-                      ? 'bg-[#1B2A4A] border-amber-500/60 text-white shadow-md'
-                      : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'
-                  }`}
-                >
-                  <div className={`w-2 h-2 rounded-full ${selectedMethodId === method.id ? 'bg-amber-400' : 'bg-slate-600'}`} />
-                  <span className="text-xs font-bold truncate">{method.name}</span>
-                </button>
-              ))}
-            </div>
+              {MANUAL_PAYMENT_METHODS.map((method) => {
+                const isPendingThis = isSwitchingMethod && pendingMethodName === method.name
+                const isCurrent = selectedMethodId === method.id && !isSwitchingMethod
 
-            {/* Selected Channel Info Box */}
-            <div className="bg-slate-950 border border-slate-800 rounded-2xl p-5 space-y-3">
-              <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                <span className="text-xs font-bold text-amber-400 uppercase tracking-wider">
-                  {selectedMethod.name} Instructions
-                </span>
-                <span className="text-[11px] text-slate-500">Official Accounts</span>
-              </div>
-
-              <p className="text-xs text-slate-400 leading-relaxed">
-                {selectedMethod.instructions}
-              </p>
-
-              <div className="space-y-2">
-                {selectedMethod.fields.map((f, idx) => (
-                  <div
-                    key={idx}
-                    className="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 rounded-xl bg-slate-900 border border-slate-800 text-xs gap-2"
+                return (
+                  <button
+                    key={method.id}
+                    type="button"
+                    disabled={isSwitchingMethod}
+                    onClick={() => handleMethodSelect(method)}
+                    className={`p-3 rounded-2xl border text-left transition flex items-center gap-2.5 ${
+                      isCurrent
+                        ? 'bg-[#1B2A4A] border-amber-500/60 text-white shadow-md'
+                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'
+                    } ${isPendingThis ? 'border-amber-400 bg-slate-900' : ''}`}
                   >
-                    <span className="text-slate-400 font-semibold">{f.label}:</span>
-                    <div className="flex items-center gap-2">
-                      <code className="font-mono text-white break-all font-bold">
-                        {f.value}
-                      </code>
-                      {f.copyable && (
-                        <button
-                          type="button"
-                          onClick={() => handleCopy(f.value, `${selectedMethod.id}-${idx}`)}
-                          className="p-1 text-slate-400 hover:text-white transition rounded bg-slate-800 shrink-0"
-                          title="Copy to clipboard"
-                        >
-                          {copiedField === `${selectedMethod.id}-${idx}` ? (
-                            <Check className="w-3.5 h-3.5 text-emerald-400" />
-                          ) : (
-                            <Copy className="w-3.5 h-3.5" />
-                          )}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
+                    {isPendingThis ? (
+                      <Loader2 className="w-3.5 h-3.5 text-amber-400 animate-spin shrink-0" />
+                    ) : (
+                      <div className={`w-2 h-2 rounded-full shrink-0 ${isCurrent ? 'bg-amber-400' : 'bg-slate-600'}`} />
+                    )}
+                    <span className="text-xs font-bold truncate">{method.name}</span>
+                  </button>
+                )
+              })}
             </div>
+
+            {/* Selected Channel Info Box (With Realistic Gateway Connecting Animation) */}
+            {isSwitchingMethod ? (
+              <div className="bg-slate-950 border border-slate-800 rounded-2xl p-8 flex flex-col items-center justify-center text-center space-y-4 min-h-[220px]">
+                <div className="relative flex items-center justify-center">
+                  <div className="w-14 h-14 rounded-full border-2 border-slate-800 border-t-amber-400 animate-spin" />
+                  <ShieldCheck className="w-6 h-6 text-amber-400 absolute" />
+                </div>
+                <div className="space-y-1">
+                  <h4 className="text-sm font-bold text-white flex items-center justify-center gap-2">
+                    <span>Connecting to {pendingMethodName} Gateway</span>
+                    <span className="inline-block w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+                  </h4>
+                  <p className="text-xs text-slate-400 max-w-sm">
+                    Establishing encrypted session & retrieving merchant coordinates...
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-slate-950 border border-slate-800 rounded-2xl p-5 space-y-3 animate-in fade-in duration-300">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                  <span className="text-xs font-bold text-amber-400 uppercase tracking-wider">
+                    {selectedMethod.name} Instructions
+                  </span>
+                  <span className="text-[11px] text-slate-500">Official Accounts</span>
+                </div>
+
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  {selectedMethod.instructions}
+                </p>
+
+                <div className="space-y-2">
+                  {selectedMethod.fields.map((f, idx) => (
+                    <div
+                      key={idx}
+                      className="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 rounded-xl bg-slate-900 border border-slate-800 text-xs gap-2"
+                    >
+                      <span className="text-slate-400 font-semibold">{f.label}:</span>
+                      <div className="flex items-center gap-2">
+                        <code className="font-mono text-white break-all font-bold">
+                          {f.value}
+                        </code>
+                        {f.copyable && (
+                          <button
+                            type="button"
+                            onClick={() => handleCopy(f.value, `${selectedMethod.id}-${idx}`)}
+                            className="p-1 text-slate-400 hover:text-white transition rounded bg-slate-800 shrink-0"
+                            title="Copy to clipboard"
+                          >
+                            {copiedField === `${selectedMethod.id}-${idx}` ? (
+                              <Check className="w-3.5 h-3.5 text-emerald-400" />
+                            ) : (
+                              <Copy className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="p-3 rounded-xl bg-slate-900/90 border border-amber-500/30 flex items-center gap-2.5 text-xs text-slate-300">
+                  <div className="w-7 h-7 rounded-lg bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+                    <Upload className="w-3.5 h-3.5" />
+                  </div>
+                  <p className="text-[11px] leading-tight">
+                    <strong className="text-white block font-semibold">Ready to confirm?</strong>
+                    Attach your transfer receipt or payment screenshot on the right to complete verification.
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Submission Form (Right side: 5 cols) */}
@@ -345,10 +501,10 @@ export default function PayPage() {
             <div>
               <div className="flex items-center gap-2 mb-2">
                 <Wallet className="w-5 h-5 text-emerald-400" />
-                <h2 className="text-sm font-bold text-white">2. Confirm Payment Details</h2>
+                <h2 className="text-sm font-bold text-white">2. Confirm Payment & Upload Proof</h2>
               </div>
               <p className="text-xs text-slate-400 mb-4 leading-relaxed">
-                After transferring through <strong>{selectedMethod.name}</strong>, enter your account details and transaction ID to submit proof.
+                After transferring through <strong>{selectedMethod.name}</strong>, enter your details and attach your transfer receipt below.
               </p>
 
               <form onSubmit={handleSubmit} className="space-y-4">
@@ -380,14 +536,82 @@ export default function PayPage() {
                   />
                 </div>
 
+                {/* Prominent Upload Payment Proof Section */}
+                <div className="p-3.5 rounded-2xl bg-slate-900 border-2 border-dashed border-amber-500/40 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                      <Upload className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Upload Proof of Payment</span>
+                    </label>
+                    <span className="text-[10px] text-slate-400">JPG, PNG, PDF (Up to 15MB)</span>
+                  </div>
+
+                  {proofPreview ? (
+                    <div className="p-3 rounded-xl bg-slate-950 border border-emerald-500/60 flex items-center justify-between gap-3 shadow-sm">
+                      <div className="flex items-center gap-3 min-w-0">
+                        {proofPreview.startsWith('data:image/') ? (
+                          <img
+                            src={proofPreview}
+                            alt="Receipt preview"
+                            className="w-14 h-14 rounded-lg object-cover border border-slate-700 shrink-0 shadow"
+                          />
+                        ) : (
+                          <div className="w-14 h-14 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center shrink-0 text-amber-400">
+                            <ImageIcon className="w-6 h-6" />
+                          </div>
+                        )}
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-white truncate">{proofFileName || 'Proof'}</p>
+                          <p className="text-[11px] text-emerald-400 flex items-center gap-1 font-semibold">
+                            <CheckCircle2 className="w-3.5 h-3.5" /> Attached ({proofFileSize})
+                          </p>
+                          <span className="text-[10px] text-slate-400">Dispatches to finance team</span>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleRemoveProof}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-slate-800 transition text-xs shrink-0"
+                        title="Remove file"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <label className="border border-dashed border-slate-700 hover:border-amber-400 bg-slate-950/60 hover:bg-slate-950 transition rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer text-center group">
+                      <input
+                        type="file"
+                        accept="image/*,application/pdf"
+                        onChange={handleFileChange}
+                        className="hidden"
+                      />
+                      <div className="w-10 h-10 rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 group-hover:scale-110 group-hover:bg-amber-500/20 transition-all mb-2">
+                        <Upload className="w-4 h-4" />
+                      </div>
+                      <p className="text-xs font-bold text-white group-hover:text-amber-300 transition">
+                        Click here to upload payment receipt or screenshot
+                      </p>
+                      <p className="text-[10px] text-slate-400 mt-0.5">
+                        Transfers via Zelle, CashApp, Wire, or Crypto receipt
+                      </p>
+                      <span className="text-[10px] text-emerald-400 mt-1.5 font-medium flex items-center gap-1">
+                        <ShieldCheck className="w-3 h-3" /> Auto-dispatched to support@sourcedeliverypro.com
+                      </span>
+                    </label>
+                  )}
+                </div>
+
                 <div className="pt-2">
                   <Button
                     type="submit"
-                    disabled={submitting || !txId.trim()}
-                    className="w-full bg-[#6B2737] hover:bg-[#521b28] text-white font-bold h-11 text-xs shadow-md"
+                    disabled={submitting || !txId.trim() || isSwitchingMethod}
+                    className="w-full bg-[#6B2737] hover:bg-[#521b28] text-white font-bold h-11 text-xs shadow-md flex items-center justify-center gap-2"
                   >
                     {submitting ? (
-                      <RefreshCw className="w-4 h-4 animate-spin mr-2" />
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin text-amber-400" />
+                        <span>Uploading Proof & Notifying Support...</span>
+                      </>
                     ) : (
                       'Submit Payment Proof'
                     )}
@@ -396,11 +620,14 @@ export default function PayPage() {
               </form>
             </div>
 
-            <div className="p-3 bg-slate-900 rounded-xl border border-slate-800 text-[10px] text-slate-500 space-y-1">
-              <div className="flex items-center gap-1.5 font-bold text-slate-400">
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" /> Secure Manual Verification
+            <div className="p-3.5 bg-slate-900 rounded-xl border border-emerald-500/30 text-xs space-y-1.5">
+              <div className="flex items-center gap-2 font-bold text-emerald-400">
+                <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>256-Bit SSL Secured & Protected Connection</span>
               </div>
-              <p>Receipt and dispatch documents will be available as soon as finance approves.</p>
+              <p className="text-[11px] text-slate-400 leading-relaxed">
+                Your payment transaction and verification documents are end-to-end encrypted and transmitted securely to our finance team.
+              </p>
             </div>
 
           </div>

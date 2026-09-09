@@ -1,21 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import nodemailer from 'nodemailer'
+import { sendEmail } from '@/lib/email'
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
     const { to, subject, trackingNumber, senderName, recipientName, origin, destination, service, estimatedDelivery, awbLink } = body
-
-    // Create transporter — uses env vars for SMTP config
-    const transporter = nodemailer.createTransport({
-      host: process.env.EMAIL_HOST || 'smtp.gmail.com',
-      port: Number(process.env.EMAIL_PORT) || 587,
-      secure: false,
-      auth: {
-        user: process.env.EMAIL_USER || '',
-        pass: process.env.EMAIL_PASS || '',
-      },
-    })
 
     const trackingUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/tracking?number=${trackingNumber}`
 
@@ -53,21 +42,18 @@ export async function POST(req: NextRequest) {
     </html>
     `
 
-    // In development, just log and return success (no real email sent)
-    if (process.env.NODE_ENV === 'development' && !process.env.EMAIL_USER) {
-      console.log('[DEV] Would send email to:', to, 'Subject:', subject)
-      console.log('[DEV] Tracking URL:', trackingUrl)
-      return NextResponse.json({ success: true, dev: true, message: 'Dev mode: email logged (not sent). Set EMAIL_USER and EMAIL_PASS env vars for real emails.' })
-    }
-
-    await transporter.sendMail({
-      from: `"SourceDeliveryPro" <${process.env.EMAIL_USER}>`,
+    const fromName = process.env.EMAIL_FROM_NAME || 'SourceDeliveryPro'
+    const result = await sendEmail({
       to,
-      subject: subject || `SourceDeliveryPro: Your Shipment ${trackingNumber} is Confirmed`,
+      subject: subject || `${fromName}: Your Shipment ${trackingNumber} is Confirmed`,
       html,
     })
 
-    return NextResponse.json({ success: true, message: 'Email sent successfully' })
+    if (!result.success) {
+      return NextResponse.json({ success: false, error: result.error }, { status: 500 })
+    }
+
+    return NextResponse.json({ success: true, message: 'Email sent successfully', messageId: result.messageId })
   } catch (err: any) {
     console.error('[Email API Error]', err)
     return NextResponse.json({ success: false, error: err.message }, { status: 500 })
