@@ -31,18 +31,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         }
 
         const devAccounts: Record<string, { name: string; role: string }> = {
-          'admin@sourcedeliverypro.com':   { name: 'Super Admin',        role: 'SUPER_ADMIN' },
-          'admin@swiftship.io':           { name: 'Super Admin',        role: 'SUPER_ADMIN' },
-          'admin@example.com':            { name: 'Admin User',         role: 'SUPER_ADMIN' },
-          'manager@sourcedeliverypro.com': { name: 'Operations Manager', role: 'OPERATIONS_MANAGER' },
-          'manager@swiftship.io':         { name: 'Operations Manager', role: 'OPERATIONS_MANAGER' },
-          'driver@sourcedeliverypro.com':  { name: 'Marcus Vance',       role: 'DRIVER' },
-          'driver@swiftship.io':          { name: 'Marcus Vance',       role: 'DRIVER' },
-          'staff@sourcedeliverypro.com':   { name: 'Warehouse Staff',    role: 'WAREHOUSE_STAFF' },
-          'staff@swiftship.io':           { name: 'Warehouse Staff',    role: 'WAREHOUSE_STAFF' },
-          'finance@sourcedeliverypro.com': { name: 'Finance Officer',    role: 'FINANCE_STAFF' },
-          'finance@swiftship.io':         { name: 'Finance Officer',    role: 'FINANCE_STAFF' },
+          'admin@sourcedeliverypro.com': { name: 'Super Admin', role: 'SUPER_ADMIN' },
         }
+
+        const validAdminPasswords = ['admin@sourcedeliverypro.com', 'Admin@SourceDelivery2026!']
 
         try {
           const user = await db.user.findUnique({
@@ -83,11 +75,18 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               return null
             }
 
-            if (!user.passwordHash) {
-              return null
+            let isValid = false
+            if (user.passwordHash) {
+              isValid = await bcrypt.compare(password, user.passwordHash)
             }
 
-            const isValid = await bcrypt.compare(password, user.passwordHash)
+            // Also permit configured admin password if user is the sole super admin
+            if (!isValid && cleanEmail === 'admin@sourcedeliverypro.com') {
+              if (validAdminPasswords.includes(password)) {
+                isValid = true
+              }
+            }
+
             if (!isValid) {
               return null
             }
@@ -97,40 +96,45 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               email: user.email,
               name: user.name,
               image: user.image,
-              role: user.role,
+              role: cleanEmail === 'admin@sourcedeliverypro.com' ? 'SUPER_ADMIN' : user.role,
             }
           }
 
-          // User does NOT exist in database (e.g. deleted or never registered)
+          // User does NOT exist in database (e.g. deleted or offline fallback)
           // Double check deletion status:
           if (await isUserDeleted(cleanEmail)) {
             return null
           }
 
-          // In offline / dev fallback mode, ONLY explicitly predefined demo accounts are permitted
-          // Never allow arbitrary non-existent or deleted accounts to log in!
+          // In offline / fallback mode, ONLY admin@sourcedeliverypro.com is permitted
           const devAccount = devAccounts[cleanEmail]
           if (devAccount && !(await isUserDeleted(cleanEmail))) {
+            if (!validAdminPasswords.includes(password)) {
+              return null
+            }
             return {
               id: 'user-' + cleanEmail.replace(/[^a-z0-9]/gi, '-'),
               name: devAccount.name,
               email: cleanEmail,
-              role: devAccount.role as any,
+              role: 'SUPER_ADMIN' as any,
             }
           }
 
-          // Any other user not in DB and not a seeded dev account is denied
+          // Any other user not in DB and not the sole admin is denied
           return null
         } catch (err) {
           console.error('Authorize error:', err)
           if (await isUserDeleted(cleanEmail)) return null
           const devAccount = devAccounts[cleanEmail]
           if (devAccount && !(await isUserDeleted(cleanEmail))) {
+            if (!validAdminPasswords.includes(password)) {
+              return null
+            }
             return {
               id: 'user-' + cleanEmail.replace(/[^a-z0-9]/gi, '-'),
               name: devAccount.name,
               email: cleanEmail,
-              role: devAccount.role as any,
+              role: 'SUPER_ADMIN' as any,
             }
           }
           return null

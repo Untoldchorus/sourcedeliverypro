@@ -96,38 +96,53 @@ export default function UserDirectoryPage() {
         }
       })
 
-      // Real users from database
-      dbUsers.forEach((u: any) => {
-        const key = (u.email || '').toLowerCase()
-        const uId = (u.id || '').toLowerCase()
-        if (key && !deleted.includes(key) && !deleted.includes(uId)) {
-          // Exclude legacy mock user remnants
-          if (key === 'driver@sourcedeliverypro.com' || key === 'manager@sourcedeliverypro.com') return
+        const legacyExcluded = [
+          'admin@swiftship.io',
+          'admin@example.com',
+          'manager@sourcedeliverypro.com',
+          'manager@swiftship.io',
+          'driver@sourcedeliverypro.com',
+          'driver@swiftship.io',
+          'staff@sourcedeliverypro.com',
+          'staff@swiftship.io',
+          'finance@sourcedeliverypro.com',
+          'finance@swiftship.io',
+          'john@example.com',
+        ]
 
-          mergedMap.set(key, {
-            id: u.id,
-            name: u.name || key.split('@')[0],
-            email: u.email,
-            phone: u.phone || '—',
-            role: u.role || 'CUSTOMER',
-            status: u.isSuspended ? 'SUSPENDED' : u.isActive === false ? 'LOCKED' : 'ACTIVE',
-            lastLogin: u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleDateString() : 'Recent',
-            company: u.role === 'BUSINESS_CUSTOMER' ? 'Commercial Account' : 'Personal Shipper',
-          })
-        }
-      })
+        // Real users from database
+        dbUsers.forEach((u: any) => {
+          const key = (u.email || '').toLowerCase().trim()
+          const uId = (u.id || '').toLowerCase().trim()
+          if (key && !deleted.includes(key) && !deleted.includes(uId)) {
+            // Exclude legacy mock user remnants
+            if (legacyExcluded.includes(key)) return
 
-      // Overlay local updates
-      localUsers.forEach((u) => {
-        if (u.email) {
-          const key = u.email.toLowerCase()
-          const uId = (u.id || '').toLowerCase()
-          if (!deleted.includes(key) && !deleted.includes(uId)) {
-            const existing = mergedMap.get(key) || {}
-            mergedMap.set(key, { ...existing, ...u })
+            mergedMap.set(key, {
+              id: u.id,
+              name: u.name || key.split('@')[0],
+              email: u.email,
+              phone: u.phone || '—',
+              role: key === 'admin@sourcedeliverypro.com' ? 'SUPER_ADMIN' : u.role || 'CUSTOMER',
+              status: u.isSuspended ? 'SUSPENDED' : u.isActive === false ? 'LOCKED' : 'ACTIVE',
+              lastLogin: u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleDateString() : 'Recent',
+              company: u.role === 'BUSINESS_CUSTOMER' ? 'Commercial Account' : 'Personal Shipper',
+            })
           }
-        }
-      })
+        })
+
+        // Overlay local updates
+        localUsers.forEach((u) => {
+          if (u.email) {
+            const key = u.email.toLowerCase().trim()
+            const uId = (u.id || '').toLowerCase().trim()
+            if (legacyExcluded.includes(key)) return
+            if (!deleted.includes(key) && !deleted.includes(uId)) {
+              const existing = mergedMap.get(key) || {}
+              mergedMap.set(key, { ...existing, ...u })
+            }
+          }
+        })
 
       setUsers(Array.from(mergedMap.values()))
     } catch (e) {

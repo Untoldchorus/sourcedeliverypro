@@ -26,9 +26,11 @@ function LoginForm() {
     setLoading(true)
     setError(null)
 
+    const cleanEmail = email.trim().toLowerCase()
+
     try {
       const res = await signIn('credentials', {
-        email,
+        email: cleanEmail,
         password,
         redirect: false,
       })
@@ -36,7 +38,9 @@ function LoginForm() {
       if (res?.error) {
         setError('Invalid email or password. Please try again.')
       } else {
-        router.push(callbackUrl)
+        const isDefaultTarget = !searchParams.get('callbackUrl') || callbackUrl === '/dashboard'
+        const targetUrl = cleanEmail === 'admin@sourcedeliverypro.com' && isDefaultTarget ? '/admin' : callbackUrl
+        router.push(targetUrl)
         router.refresh()
       }
     } catch (err) {
