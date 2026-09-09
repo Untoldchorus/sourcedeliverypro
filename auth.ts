@@ -5,6 +5,7 @@ import bcrypt from 'bcryptjs'
 import { db } from '@/lib/db'
 import { authConfig } from '@/auth.config'
 import { loginSchema } from '@/lib/validations/auth'
+import { isUserDeleted } from '@/lib/auth/deletedUsers'
 import type { UserRole } from '@prisma/client'
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
@@ -22,40 +23,30 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (!parsed.success) return null
 
         const { email, password } = parsed.data
+        const cleanEmail = email.trim().toLowerCase()
 
-        const getFallbackUser = (userEmail: string) => {
-          const devAccounts: Record<string, { name: string; role: string }> = {
-            'admin@sourcedeliverypro.com':   { name: 'Super Admin',        role: 'SUPER_ADMIN' },
-            'admin@swiftship.io':           { name: 'Super Admin',        role: 'SUPER_ADMIN' },
-            'admin@example.com':            { name: 'Admin User',         role: 'SUPER_ADMIN' },
-            'manager@sourcedeliverypro.com': { name: 'Operations Manager', role: 'OPERATIONS_MANAGER' },
-            'manager@swiftship.io':         { name: 'Operations Manager', role: 'OPERATIONS_MANAGER' },
-            'driver@sourcedeliverypro.com':  { name: 'Marcus Vance',       role: 'DRIVER' },
-            'driver@swiftship.io':          { name: 'Marcus Vance',       role: 'DRIVER' },
-            'staff@sourcedeliverypro.com':   { name: 'Warehouse Staff',    role: 'WAREHOUSE_STAFF' },
-            'staff@swiftship.io':           { name: 'Warehouse Staff',    role: 'WAREHOUSE_STAFF' },
-            'finance@sourcedeliverypro.com': { name: 'Finance Officer',    role: 'FINANCE_STAFF' },
-            'finance@swiftship.io':         { name: 'Finance Officer',    role: 'FINANCE_STAFF' },
-            'john@example.com':             { name: 'John Doe',           role: 'CUSTOMER' },
-          }
-          const devAccount = devAccounts[userEmail.toLowerCase()]
-          const devRole = devAccount?.role
-            ?? (userEmail.includes('admin') ? 'SUPER_ADMIN'
-              : userEmail.includes('driver') ? 'DRIVER'
-              : userEmail.includes('staff') ? 'WAREHOUSE_STAFF'
-              : 'CUSTOMER')
-          const devName = devAccount?.name ?? userEmail.split('@')[0]
-          return {
-            id: 'user-' + userEmail.replace(/[^a-z0-9]/gi, '-'),
-            name: devName,
-            email: userEmail.toLowerCase(),
-            role: devRole as any,
-          }
+        // 1. Immediately block if marked as deleted
+        if (await isUserDeleted(cleanEmail)) {
+          return null
+        }
+
+        const devAccounts: Record<string, { name: string; role: string }> = {
+          'admin@sourcedeliverypro.com':   { name: 'Super Admin',        role: 'SUPER_ADMIN' },
+          'admin@swiftship.io':           { name: 'Super Admin',        role: 'SUPER_ADMIN' },
+          'admin@example.com':            { name: 'Admin User',         role: 'SUPER_ADMIN' },
+          'manager@sourcedeliverypro.com': { name: 'Operations Manager', role: 'OPERATIONS_MANAGER' },
+          'manager@swiftship.io':         { name: 'Operations Manager', role: 'OPERATIONS_MANAGER' },
+          'driver@sourcedeliverypro.com':  { name: 'Marcus Vance',       role: 'DRIVER' },
+          'driver@swiftship.io':          { name: 'Marcus Vance',       role: 'DRIVER' },
+          'staff@sourcedeliverypro.com':   { name: 'Warehouse Staff',    role: 'WAREHOUSE_STAFF' },
+          'staff@swiftship.io':           { name: 'Warehouse Staff',    role: 'WAREHOUSE_STAFF' },
+          'finance@sourcedeliverypro.com': { name: 'Finance Officer',    role: 'FINANCE_STAFF' },
+          'finance@swiftship.io':         { name: 'Finance Officer',    role: 'FINANCE_STAFF' },
         }
 
         try {
           const user = await db.user.findUnique({
-            where: { email: email.toLowerCase() },
+            where: { email: cleanEmail },
             select: {
               id: true,
               email: true,
@@ -65,34 +56,84 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               passwordHash: true,
               isActive: true,
               isSuspended: true,
+              suspendedReason: true,
               lockedUntil: true,
               loginAttempts: true,
               emailVerified: true,
             },
           }).catch(() => null)
 
-          if (!user || !user.passwordHash) {
-            return getFallbackUser(email)
+          if (user) {
+            // Check if user ID or email was flagged as deleted
+            if (await isUserDeleted(user.id) || await isUserDeleted(user.email)) {
+              return null
+            }
+
+            // Check if user is inactive, suspended, or marked deleted
+            if (
+              !user.isActive ||
+              user.isSuspended ||
+              user.suspendedReason === 'DELETED_BY_ADMIN' ||
+              user.passwordHash?.startsWith('DELETED_')
+            ) {
+              return null
+            }
+
+            if (user.lockedUntil && user.lockedUntil > new Date()) {
+              return null
+            }
+
+            if (!user.passwordHash) {
+              return null
+            }
+
+            const isValid = await bcrypt.compare(password, user.passwordHash)
+            if (!isValid) {
+              return null
+            }
+
+            return {
+              id: user.id,
+              email: user.email,
+              name: user.name,
+              image: user.image,
+              role: user.role,
+            }
           }
 
-          if (!user.isActive || user.isSuspended) return null
-          if (user.lockedUntil && user.lockedUntil > new Date()) return null
-
-          const isValid = await bcrypt.compare(password, user.passwordHash)
-
-          if (!isValid) {
+          // User does NOT exist in database (e.g. deleted or never registered)
+          // Double check deletion status:
+          if (await isUserDeleted(cleanEmail)) {
             return null
           }
 
-          return {
-            id: user.id,
-            email: user.email,
-            name: user.name,
-            image: user.image,
-            role: user.role,
+          // In offline / dev fallback mode, ONLY explicitly predefined demo accounts are permitted
+          // Never allow arbitrary non-existent or deleted accounts to log in!
+          const devAccount = devAccounts[cleanEmail]
+          if (devAccount && !(await isUserDeleted(cleanEmail))) {
+            return {
+              id: 'user-' + cleanEmail.replace(/[^a-z0-9]/gi, '-'),
+              name: devAccount.name,
+              email: cleanEmail,
+              role: devAccount.role as any,
+            }
           }
+
+          // Any other user not in DB and not a seeded dev account is denied
+          return null
         } catch (err) {
-          return getFallbackUser(email)
+          console.error('Authorize error:', err)
+          if (await isUserDeleted(cleanEmail)) return null
+          const devAccount = devAccounts[cleanEmail]
+          if (devAccount && !(await isUserDeleted(cleanEmail))) {
+            return {
+              id: 'user-' + cleanEmail.replace(/[^a-z0-9]/gi, '-'),
+              name: devAccount.name,
+              email: cleanEmail,
+              role: devAccount.role as any,
+            }
+          }
+          return null
         }
       },
     }),
@@ -103,11 +144,29 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (user) {
         token.id = user.id || ''
         token.role = (user as { role: UserRole }).role
+        token.email = user.email || token.email
       }
+
+      // Check revocation/deletion
+      const checkId = (token.id as string) || ''
+      const checkEmail = (token.email as string) || ''
+      if (await isUserDeleted(checkId) || await isUserDeleted(checkEmail)) {
+        token.id = ''
+        token.email = ''
+        ;(token as any).isDeleted = true
+      }
+
       return token
     },
     async session({ session, token }) {
       if (token) {
+        const checkId = (token.id as string) || ''
+        const checkEmail = (token.email as string) || ''
+        if ((token as any).isDeleted || await isUserDeleted(checkId) || await isUserDeleted(checkEmail)) {
+          session.user = null as any
+          return session
+        }
+
         session.user.id = token.id as string
         session.user.role = token.role as UserRole
       }

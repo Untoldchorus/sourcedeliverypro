@@ -10,11 +10,16 @@ import { Button } from '@/components/ui/button'
 function LoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const errorParam = searchParams.get('error')
   const callbackUrl = searchParams.get('callbackUrl') || '/dashboard'
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(
+    errorParam === 'account_deleted'
+      ? 'This account has been deactivated or deleted by an administrator.'
+      : null
+  )
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

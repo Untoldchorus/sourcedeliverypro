@@ -28,7 +28,8 @@ export const authConfig: NextAuthConfig = {
   callbacks: {
     authorized({ auth, request: { nextUrl } }) {
       try {
-        const isLoggedIn = !!auth?.user
+        const isUserRevoked = !auth?.user?.id || Boolean((auth?.user as any)?.isDeleted)
+        const isLoggedIn = Boolean(auth?.user) && !isUserRevoked
         const pathname = nextUrl.pathname
         const isLocalhost = nextUrl.hostname === 'localhost' || nextUrl.hostname === '127.0.0.1'
 
@@ -39,8 +40,13 @@ export const authConfig: NextAuthConfig = {
         const isShipping = pathname === '/shipping' || (pathname.startsWith('/shipping/') && pathname !== '/shipping/quote')
         const isProtected = isDashboard || isAdmin || isStaff || isDriver || isShipping
 
-        if (isProtected && !isLoggedIn) {
-          return Response.redirect(new URL(`/login?callbackUrl=${encodeURIComponent(pathname)}`, nextUrl))
+        if (isProtected) {
+          if (auth?.user && isUserRevoked) {
+            return Response.redirect(new URL('/login?error=account_deleted', nextUrl))
+          }
+          if (!isLoggedIn) {
+            return Response.redirect(new URL(`/login?callbackUrl=${encodeURIComponent(pathname)}`, nextUrl))
+          }
         }
 
         if (isAdmin && isLoggedIn) {

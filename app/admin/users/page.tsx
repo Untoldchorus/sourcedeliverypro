@@ -7,7 +7,7 @@ import {
   AlertCircle, RefreshCw, X, CheckCircle2, Plus, Save, Trash2, Shield
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { getDeletedUsers, addDeletedUser } from '@/lib/payments/manualOptions'
+import { getDeletedUsers, addDeletedUser, removeDeletedUser } from '@/lib/payments/manualOptions'
 
 interface AdminUser {
   id: string
@@ -72,12 +72,14 @@ export default function UserDirectoryPage() {
   const loadUsers = async () => {
     setLoading(true)
     try {
-      const deleted = getDeletedUsers()
-
       // 1. Fetch real users from DB
       const res = await fetch('/api/admin/users')
       const json = await res.json()
       const dbUsers: any[] = json.success && Array.isArray(json.data) ? json.data : []
+      if (Array.isArray(json.deletedUsers)) {
+        json.deletedUsers.forEach((d: string) => addDeletedUser(d))
+      }
+      const deleted = getDeletedUsers()
 
       // 2. Read local overrides
       const savedRaw = localStorage.getItem('sourcedeliverypro_admin_users') || localStorage.getItem('swiftship_admin_users')
@@ -199,10 +201,13 @@ export default function UserDirectoryPage() {
     e.preventDefault()
     if (!newUser.name || !newUser.email) return
 
+    const cleanEmail = newUser.email.toLowerCase().trim()
+    removeDeletedUser(cleanEmail)
+
     const created: AdminUser = {
       id: 'usr-' + Date.now(),
       name: newUser.name,
-      email: newUser.email.toLowerCase(),
+      email: cleanEmail,
       phone: newUser.phone || '+1 555-0000',
       role: newUser.role,
       status: 'ACTIVE',

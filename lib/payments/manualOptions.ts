@@ -332,13 +332,25 @@ export function addDeletedUser(idOrEmail: string) {
   if (typeof window === 'undefined' || !idOrEmail) return
   try {
     const deleted = getDeletedUsers()
-    const target = idOrEmail.toLowerCase()
+    const target = idOrEmail.toLowerCase().trim()
     if (!deleted.includes(target)) {
       deleted.push(target)
       localStorage.setItem('sourcedeliverypro_deleted_users', JSON.stringify(deleted))
     }
   } catch (err) {
     console.error('Failed to record deleted user', err)
+  }
+}
+
+export function removeDeletedUser(idOrEmail: string) {
+  if (typeof window === 'undefined' || !idOrEmail) return
+  try {
+    const deleted = getDeletedUsers()
+    const target = idOrEmail.toLowerCase().trim()
+    const filtered = deleted.filter((d) => d !== target)
+    localStorage.setItem('sourcedeliverypro_deleted_users', JSON.stringify(filtered))
+  } catch (err) {
+    console.error('Failed to unmark deleted user', err)
   }
 }
 
