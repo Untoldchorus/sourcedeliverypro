@@ -9,7 +9,7 @@ import {
 } from '@/lib/tracking'
 import { calculateShippingRate } from '@/lib/pricing'
 
-export function normalizeServiceType(val?: string): string {
+function normalizeServiceType(val?: string): string {
   if (!val) return 'STANDARD'
   const v = val.toUpperCase().trim()
   if (v.includes('NIGHT') || v.includes('OVERNIGHT') || v.includes('OVER_NIGHT') || v === 'EXPRESS') return 'EXPRESS'
@@ -18,7 +18,7 @@ export function normalizeServiceType(val?: string): string {
   return 'STANDARD'
 }
 
-export function normalizeShipmentStatus(val?: string): string {
+function normalizeShipmentStatus(val?: string): string {
   if (!val) return 'PENDING_PAYMENT'
   const v = val.toUpperCase().trim()
   if (v === 'PAYMENT_SUBMITTED' || v === 'AWAITING_CONFIRMATION' || v === 'AWAITING_ADMIN_APPROVAL') {
@@ -50,7 +50,11 @@ export async function POST(request: NextRequest) {
     const senderEmail = (body.senderEmail || '').trim()
     const senderPhone = (body.senderPhone || '+1 555-0199').trim()
     const senderAddress = (body.senderAddressLine1 || body.senderAddress || 'Main Logistics Dispatch').trim()
-    const senderCity = (body.senderCity || body.origin || 'New York').trim()
+    let rawSenderCity = (body.senderCity || body.origin || 'New York').trim()
+    if (rawSenderCity.toLowerCase().endsWith('kg')) {
+      rawSenderCity = 'New York'
+    }
+    const senderCity = rawSenderCity || 'New York'
     const senderCountry = (body.senderCountry || 'US').trim()
 
     const recipientName = (body.recipientName || body.recipient || 'Recipient').trim()
@@ -60,7 +64,7 @@ export async function POST(request: NextRequest) {
     const recipientCity = (body.recipientCity || body.destination || 'London').trim()
     const recipientCountry = (body.recipientCountry || 'GB').trim()
 
-    const weightNum = parseFloat(body.weight) || 3.5
+    const weightNum = parseFloat(String(body.weight || '3.5').replace(/[^0-9.]/g, '')) || 3.5
     const serviceType = normalizeServiceType(body.serviceType || body.service)
     const shipmentStatus = normalizeShipmentStatus(body.status || 'PENDING_PAYMENT')
     const trackingNumber = (body.trackingNumber || generateTrackingNumber()).trim().toUpperCase()
@@ -356,9 +360,13 @@ async function ensureShipmentsSynced() {
             status: 'PENDING_PAYMENT',
             serviceType: 'STANDARD',
             senderName: 'Logistics Operations Dispatch',
+            senderEmail: 'operations@sourcedeliverypro.com',
+            senderPhone: '+1-800-555-0199',
+            senderAddressLine1: 'JFK Operations Dispatch Hub',
             senderCity: 'New York',
             senderCountry: 'US',
             recipientName: 'Sarah Jenkins',
+            recipientAddressLine1: '10 Downing Street',
             recipientCity: 'London',
             recipientCountry: 'GB',
             weight: 3.5,
@@ -618,13 +626,33 @@ export async function PATCH(request: NextRequest) {
     if (body.trackingNumber && body.trackingNumber.startsWith('SDP') && !body.trackingNumber.includes('Pending')) {
       updateData.trackingNumber = body.trackingNumber
     }
-    if (body.serviceType || body.service) {
-      updateData.serviceType = normalizeServiceType(body.serviceType || body.service)
+    if (body.weight !== undefined) {
+      const parsedWeight = parseFloat(String(body.weight).replace(/[^0-9.]/g, ''))
+      if (!isNaN(parsedWeight) && parsedWeight > 0) {
+        updateData.weight = parsedWeight
+      }
     }
-    if (body.weight) updateData.weight = parseFloat(body.weight) || shipment.weight
-    if (body.amount || body.totalAmount) updateData.totalAmount = parseFloat(body.amount || body.totalAmount) || shipment.totalAmount
-    if (body.senderCity) updateData.senderCity = body.senderCity
-    if (body.recipientCity) updateData.recipientCity = body.recipientCity
+    if (body.amount !== undefined || body.totalAmount !== undefined) {
+      const parsedAmount = parseFloat(String(body.amount || body.totalAmount).replace(/[^0-9.]/g, ''))
+      if (!isNaN(parsedAmount)) {
+        updateData.totalAmount = parsedAmount
+        updateData.baseRate = Math.round((parsedAmount * 0.8) * 100) / 100
+        updateData.fuelSurcharge = Math.round((parsedAmount * 0.1) * 100) / 100
+        updateData.taxAmount = Math.round((parsedAmount * 0.1) * 100) / 100
+      }
+    }
+    if (body.senderCity || body.origin) {
+      const cityVal = (body.senderCity || body.origin || '').trim()
+      if (cityVal && !cityVal.toLowerCase().endsWith('kg')) {
+        updateData.senderCity = cityVal
+      }
+    }
+    if (body.recipientCity || body.destination) {
+      const destVal = (body.recipientCity || body.destination || '').trim()
+      if (destVal) {
+        updateData.recipientCity = destVal
+      }
+    }
     if (body.recipientName) updateData.recipientName = body.recipientName
     if (body.senderName) updateData.senderName = body.senderName
 

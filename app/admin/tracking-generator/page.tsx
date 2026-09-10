@@ -27,7 +27,9 @@ export default function TrackingGeneratorPage() {
     service: 'Standard Courier Service',
     weight: '',
     estimatedDelivery: '',
+    customAmount: '127.50',
   })
+  const [bypassCalculator, setBypassCalculator] = useState(false)
   const [generated, setGenerated] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [emailStatus, setEmailStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle')
@@ -38,6 +40,16 @@ export default function TrackingGeneratorPage() {
   // history of generated numbers
   const [history, setHistory] = useState<Array<{awb: string, recipient: string, destination: string, time: string}>>([]) 
 
+  const handleWeightChange = (newWeight: string) => {
+    const nextForm = { ...form, weight: newWeight }
+    if (!bypassCalculator) {
+      const wNum = parseFloat(String(newWeight).replace(/[^0-9.]/g, '')) || 3.5
+      const calc = Math.round((wNum * 25 + 40) * 100) / 100
+      nextForm.customAmount = calc.toFixed(2)
+    }
+    setForm(nextForm)
+  }
+
   const handleGenerate = (e: React.FormEvent) => {
     e.preventDefault()
     const awb = generateAWB()
@@ -46,8 +58,14 @@ export default function TrackingGeneratorPage() {
     setEmailStatus('idle')
     setHistory(prev => [{ awb, recipient: form.recipientName, destination: form.destination, time: new Date().toLocaleTimeString() }, ...prev.slice(0, 9)])
     
-    const weightNum = parseFloat(form.weight) || 3.5
+    const weightNum = parseFloat(String(form.weight || '3.5').replace(/[^0-9.]/g, '')) || 3.5
     const calculatedAmount = Math.round((weightNum * 25 + 40) * 100) / 100
+    const finalAmount = bypassCalculator && form.customAmount !== ''
+      ? parseFloat(form.customAmount) || 0
+      : (parseFloat(form.customAmount) || calculatedAmount)
+
+    const cleanOrigin = form.origin.trim()
+    const cleanDestination = form.destination.trim()
 
     const shipmentObj = {
       id: awb,
@@ -57,20 +75,45 @@ export default function TrackingGeneratorPage() {
       senderEmail: form.senderEmail,
       recipientName: form.recipientName,
       recipientEmail: form.recipientEmail,
-      senderCity: form.origin,
-      recipientCity: form.destination,
-      origin: form.origin,
-      destination: form.destination,
+      senderCity: cleanOrigin,
+      recipientCity: cleanDestination,
+      origin: cleanOrigin,
+      destination: cleanDestination,
       serviceType: form.service,
-      weight: form.weight,
+      weight: weightNum,
       estimatedDelivery: form.estimatedDelivery,
-      amount: calculatedAmount,
+      amount: finalAmount,
+      totalAmount: finalAmount,
       created: new Date().toLocaleDateString(),
     }
 
     saveLocalShipment(shipmentObj)
     setCurrentShipment(shipmentObj)
     setShowPaymentModal(true)
+
+    // Sync to database
+    fetch('/api/shipments', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: awb,
+        trackingNumber: awb,
+        status: 'PENDING_PAYMENT',
+        senderName: form.senderName,
+        senderEmail: form.senderEmail,
+        recipientName: form.recipientName,
+        recipientEmail: form.recipientEmail,
+        senderCity: cleanOrigin,
+        recipientCity: cleanDestination,
+        origin: cleanOrigin,
+        destination: cleanDestination,
+        serviceType: form.service,
+        weight: weightNum,
+        amount: finalAmount,
+        totalAmount: finalAmount,
+        estimatedDelivery: form.estimatedDelivery,
+      }),
+    }).catch((err) => console.warn('DB creation error:', err))
   }
 
   const handleCopy = () => {
@@ -182,13 +225,70 @@ export default function TrackingGeneratorPage() {
               </div>
               <div>
                 <label className="block text-slate-400 font-bold mb-1">Weight (kg)</label>
-                <input type="text" value={form.weight} onChange={(e) => setForm({...form, weight: e.target.value})} placeholder="e.g. 3.5"
+                <input type="text" value={form.weight} onChange={(e) => handleWeightChange(e.target.value)} placeholder="e.g. 3.5"
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-[#6B2737]" />
               </div>
               <div className="sm:col-span-2">
                 <label className="block text-slate-400 font-bold mb-1">Estimated Delivery Date</label>
                 <input type="text" value={form.estimatedDelivery} onChange={(e) => setForm({...form, estimatedDelivery: e.target.value})} placeholder="e.g. Sep 10, 2026"
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:ring-1 focus:ring-[#6B2737]" />
+              </div>
+
+              {/* Rate & Calculator Bypass Section */}
+              <div className="sm:col-span-2 p-3.5 bg-slate-950/80 rounded-xl border border-slate-800 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-slate-300">Rate Calculator &amp; Pricing Control</span>
+                  <label className="flex items-center gap-1.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={bypassCalculator}
+                      onChange={(e) => setBypassCalculator(e.target.checked)}
+                      className="rounded bg-slate-900 border-slate-700 text-[#6B2737] focus:ring-[#6B2737]"
+                    />
+                    <span className={`text-[10px] font-bold ${bypassCalculator ? 'text-amber-400' : 'text-slate-400'}`}>
+                      Bypass Calculator (Manual Custom Rate)
+                    </span>
+                  </label>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <div className="flex-1">
+                    <label className="block text-[10px] text-slate-400 mb-1">
+                      Total Shipment Rate ($ USD) {bypassCalculator && <span className="text-amber-400 font-bold">(Manual Override Active)</span>}
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-2 text-slate-500 font-bold text-xs">$</span>
+                      <input
+                        type="text"
+                        value={form.customAmount}
+                        onChange={(e) => {
+                          setBypassCalculator(true)
+                          setForm({ ...form, customAmount: e.target.value })
+                        }}
+                        placeholder="e.g. 145.50"
+                        className="w-full bg-slate-900 border border-slate-750 rounded-xl pl-7 pr-3 py-2 text-emerald-400 font-mono font-bold text-xs focus:outline-none focus:ring-1 focus:ring-[#6B2737]"
+                      />
+                    </div>
+                  </div>
+                  {!bypassCalculator && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const wNum = parseFloat(String(form.weight).replace(/[^0-9.]/g, '')) || 3.5
+                        const calc = Math.round((wNum * 25 + 40) * 100) / 100
+                        setForm({ ...form, customAmount: calc.toFixed(2) })
+                      }}
+                      className="mt-4 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-[10px] font-bold transition cursor-pointer"
+                    >
+                      Re-Calculate
+                    </button>
+                  )}
+                </div>
+                <p className="text-[10px] text-slate-500">
+                  {bypassCalculator
+                    ? 'Calculator bypassed. The amount entered above will be charged and printed on waybill without auto-adjusting.'
+                    : 'Auto-calculation active. Formula: (Weight kg × $25) + $40 baseline fee. Check "Bypass Calculator" to set custom price.'}
+                </p>
               </div>
             </div>
             <Button type="submit" className="w-full bg-[#6B2737] hover:bg-[#E85A24] text-white font-black text-sm py-3">

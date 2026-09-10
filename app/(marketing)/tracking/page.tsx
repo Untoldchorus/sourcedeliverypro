@@ -157,8 +157,26 @@ function mergeAdminOverride(data: TrackingData): TrackingData {
         (s.trackingNumber || s.awb || s.id || '').toString().trim().toUpperCase().replace(/\s+/g, '') === target
     )
     if (!override) return data
+
+    const rawWeight = override.weight !== undefined ? override.weight : data.weight
+    const parsedWeight = parseFloat(String(rawWeight || '3.5').replace(/[^0-9.]/g, ''))
+    const resolvedWeight = !isNaN(parsedWeight) && parsedWeight > 0 ? parsedWeight : data.weight
+
+    const resolvedOriginCity = override.senderCity || override.origin || data.originCity
+    const sanitizedOrigin = resolvedOriginCity && !resolvedOriginCity.toString().toLowerCase().endsWith('kg')
+      ? resolvedOriginCity
+      : data.originCity
+
+    const resolvedDestinationCity = override.recipientCity || override.destination || data.destinationCity
+
     return {
       ...data,
+      weight: resolvedWeight,
+      originCity: sanitizedOrigin,
+      destinationCity: resolvedDestinationCity,
+      originCountry: override.senderCountry || data.originCountry,
+      destinationCountry: override.recipientCountry || data.destinationCountry,
+      serviceType: override.serviceType || override.service || data.serviceType,
       status: override.status ?? data.status,
       currentLocation: override.currentLocation ?? override.location ?? data.currentLocation,
       mapQuery: override.mapQuery ?? data.mapQuery,
@@ -220,18 +238,24 @@ function TrackingContent() {
           (s: any) => (s.trackingNumber || s.id || '').toUpperCase().trim() === trimmed
         )
         if (localFound) {
+          const parsedWeight = parseFloat(String(localFound.weight || '3.5').replace(/[^0-9.]/g, ''))
+          const resolvedWeight = !isNaN(parsedWeight) && parsedWeight > 0 ? parsedWeight : 3.5
+          const rawOrigin = localFound.senderCity || localFound.origin || 'Origin Facility'
+          const cleanOrigin = rawOrigin && !rawOrigin.toString().toLowerCase().endsWith('kg') ? rawOrigin : 'Origin Facility'
+          const cleanDestination = localFound.recipientCity || localFound.destination || 'Destination Hub'
+
           setData({
             trackingNumber: localFound.trackingNumber || localFound.id,
             status: localFound.status || 'PENDING_PAYMENT',
             serviceType: localFound.serviceType || localFound.service || 'INTERNATIONAL_EXPRESS',
-            originCity: localFound.senderCity || localFound.origin || 'Origin Facility',
-            originCountry: localFound.originCountry || 'US',
-            destinationCity: localFound.recipientCity || localFound.destination || 'Destination Hub',
-            destinationCountry: localFound.destinationCountry || 'Global',
-            weight: Number(localFound.weight) || 3.5,
-            packageCount: 1,
+            originCity: cleanOrigin,
+            originCountry: localFound.originCountry || localFound.senderCountry || 'US',
+            destinationCity: cleanDestination,
+            destinationCountry: localFound.destinationCountry || localFound.recipientCountry || 'Global',
+            weight: resolvedWeight,
+            packageCount: parseInt(localFound.packageCount) || 1,
             estimatedDelivery: localFound.estimatedDelivery || 'In Transit',
-            currentLocation: localFound.currentLocation || localFound.senderCity || 'Processing Hub',
+            currentLocation: localFound.currentLocation || cleanOrigin || 'Processing Hub',
             mapQuery: localFound.mapQuery || undefined,
             showMap: localFound.showMap !== undefined ? Boolean(localFound.showMap) : true,
             remarks: Array.isArray(localFound.remarks) ? localFound.remarks : [],
@@ -246,6 +270,8 @@ function TrackingContent() {
                     timestamp: localFound.createdAt || new Date().toISOString(),
                   },
                 ],
+            hasProofOfDelivery: false,
+            proofOfDelivery: null,
           })
           return
         }
@@ -267,18 +293,24 @@ function TrackingContent() {
         (s: any) => (s.trackingNumber || s.id || '').toUpperCase().trim() === trimmed
       )
       if (localFound) {
+        const parsedWeight = parseFloat(String(localFound.weight || '3.5').replace(/[^0-9.]/g, ''))
+        const resolvedWeight = !isNaN(parsedWeight) && parsedWeight > 0 ? parsedWeight : 3.5
+        const rawOrigin = localFound.senderCity || localFound.origin || 'Origin Facility'
+        const cleanOrigin = rawOrigin && !rawOrigin.toString().toLowerCase().endsWith('kg') ? rawOrigin : 'Origin Facility'
+        const cleanDestination = localFound.recipientCity || localFound.destination || 'Destination Hub'
+
         setData({
           trackingNumber: localFound.trackingNumber || localFound.id,
           status: localFound.status || 'PENDING_PAYMENT',
           serviceType: localFound.serviceType || localFound.service || 'INTERNATIONAL_EXPRESS',
-          originCity: localFound.senderCity || localFound.origin || 'Origin Facility',
-          originCountry: 'US',
-          destinationCity: localFound.recipientCity || localFound.destination || 'Destination Hub',
-          destinationCountry: 'Global',
-          weight: Number(localFound.weight) || 3.5,
-          packageCount: 1,
+          originCity: cleanOrigin,
+          originCountry: localFound.originCountry || localFound.senderCountry || 'US',
+          destinationCity: cleanDestination,
+          destinationCountry: localFound.destinationCountry || localFound.recipientCountry || 'Global',
+          weight: resolvedWeight,
+          packageCount: parseInt(localFound.packageCount) || 1,
           estimatedDelivery: localFound.estimatedDelivery || 'In Transit',
-          currentLocation: localFound.currentLocation || localFound.senderCity || 'Processing Hub',
+          currentLocation: localFound.currentLocation || cleanOrigin || 'Processing Hub',
           mapQuery: localFound.mapQuery || undefined,
           showMap: localFound.showMap !== undefined ? Boolean(localFound.showMap) : true,
           remarks: Array.isArray(localFound.remarks) ? localFound.remarks : [],

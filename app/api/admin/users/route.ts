@@ -147,7 +147,7 @@ export async function DELETE(request: NextRequest) {
           // Delete other direct user relationships
           await db.driver.deleteMany({ where: { userId: user.id } }).catch(() => null)
           await db.businessMember.deleteMany({ where: { userId: user.id } }).catch(() => null)
-          await db.supportMessage.deleteMany({ where: { senderId: user.id } }).catch(() => null)
+          await (db as any).supportMessage.deleteMany({ where: { senderId: user.id } }).catch(() => null)
           await db.supportTicket.deleteMany({ where: { userId: user.id } }).catch(() => null)
           await db.securityEvent.deleteMany({ where: { userId: user.id } }).catch(() => null)
           await db.account.deleteMany({ where: { userId: user.id } }).catch(() => null)
@@ -156,7 +156,7 @@ export async function DELETE(request: NextRequest) {
           await db.notification.deleteMany({ where: { userId: user.id } }).catch(() => null)
           await db.notificationPreference.deleteMany({ where: { userId: user.id } }).catch(() => null)
           await db.userPermission.deleteMany({ where: { userId: user.id } }).catch(() => null)
-          await db.auditLog.deleteMany({ where: { OR: [{ userId: user.id }, { targetId: user.id }] } }).catch(() => null)
+          await (db as any).auditLog.deleteMany({ where: { OR: [{ userId: user.id }, { targetId: user.id }] } }).catch(() => null)
 
           // C. Finally remove the user record itself
           await db.user.delete({ where: { id: user.id } }).catch((err) => {

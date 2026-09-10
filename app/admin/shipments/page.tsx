@@ -21,7 +21,10 @@ import {
   EyeOff,
   Save,
   Check,
-  AlertCircle
+  AlertCircle,
+  DollarSign,
+  Calculator,
+  Scale
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { formatCurrency } from '@/lib/utils'
@@ -68,6 +71,10 @@ const DEFAULT_SEED_SHIPMENTS = [
   {
     id: 'SDP8F4K92LM381',
     trackingNumber: 'SDP8F4K92LM381',
+    senderName: 'John Doe',
+    senderCity: 'New York',
+    recipientName: 'Sarah Jenkins',
+    recipientCity: 'London',
     recipient: 'Sarah Jenkins (London)',
     sender: 'John Doe (New York)',
     service: 'Over Night Express Service',
@@ -75,6 +82,7 @@ const DEFAULT_SEED_SHIPMENTS = [
     facility: 'JFK Dispatch Hub',
     status: 'IN_TRANSIT',
     amount: 145.5,
+    weight: '5.5 kg',
     currentLocation: 'JFK International Airport Hub, New York, US',
     mapQuery: 'JFK+Airport+New+York',
     showMap: true,
@@ -83,6 +91,10 @@ const DEFAULT_SEED_SHIPMENTS = [
   {
     id: 'SDP993C104KL22',
     trackingNumber: 'SDP993C104KL22',
+    senderName: 'Global Supplier',
+    senderCity: 'New York',
+    recipientName: 'Acme Corp Warehouse',
+    recipientCity: 'Lagos',
     recipient: 'Acme Corp Warehouse (Lagos)',
     sender: 'Global Supplier (New York)',
     service: 'Usual Courier Service',
@@ -90,6 +102,7 @@ const DEFAULT_SEED_SHIPMENTS = [
     facility: 'Murtala Muhammed Freight Facility',
     status: 'CUSTOMS_CLEARANCE',
     amount: 320.0,
+    weight: '12.0 kg',
     currentLocation: 'Murtala Muhammed Freight Facility, Lagos, NG',
     mapQuery: 'Lagos,Nigeria',
     showMap: true,
@@ -98,6 +111,10 @@ const DEFAULT_SEED_SHIPMENTS = [
   {
     id: 'SDP77B219KP440',
     trackingNumber: 'SDP77B219KP440',
+    senderName: 'Toronto Export Center',
+    senderCity: 'Toronto',
+    recipientName: 'Marcus Vance',
+    recipientCity: 'Frankfurt',
     recipient: 'Marcus Vance (Frankfurt)',
     sender: 'Toronto Export Center (CA)',
     service: 'Standard Courier Service',
@@ -105,6 +122,7 @@ const DEFAULT_SEED_SHIPMENTS = [
     facility: 'Frankfurt Cargo Sorting Terminal',
     status: 'DELIVERED',
     amount: 98.75,
+    weight: '2.5 kg',
     currentLocation: 'Frankfurt Cargo Sorting Terminal, DE — Delivered',
     mapQuery: 'Frankfurt,Germany',
     showMap: false,
@@ -118,7 +136,7 @@ export default function AdminShipmentsPage() {
   const [statusSaved, setStatusSaved] = useState<string | null>(null)
   const [successToast, setSuccessToast] = useState<string | null>(null)
 
-  // ─── Pop-Out Edit Modal State ───
+  // ─── Pop-Out Quick Edit Modal State ───
   const [editingShipment, setEditingShipment] = useState<any | null>(null)
   const [isSavingEdit, setIsSavingEdit] = useState(false)
   const [editForm, setEditForm] = useState<{
@@ -126,6 +144,10 @@ export default function AdminShipmentsPage() {
     trackingNumber: string
     status: string
     service: string
+    weight: string
+    amount: number
+    senderCity: string
+    recipientCity: string
     currentLocation: string
     mapQuery: string
     showMap: boolean
@@ -135,6 +157,10 @@ export default function AdminShipmentsPage() {
     trackingNumber: '',
     status: 'IN_TRANSIT',
     service: 'Express Courier',
+    weight: '3.5',
+    amount: 145.5,
+    senderCity: '',
+    recipientCity: '',
     currentLocation: '',
     mapQuery: '',
     showMap: true,
@@ -145,6 +171,154 @@ export default function AdminShipmentsPage() {
   const [newMilestoneStatus, setNewMilestoneStatus] = useState('IN_TRANSIT')
   const [newMilestoneLocation, setNewMilestoneLocation] = useState('')
   const [newMilestoneDesc, setNewMilestoneDesc] = useState('')
+
+  // ─── Direct Add Shipment Modal State (With Full Manual Bypass Controls) ───
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false)
+  const [isSubmittingAdd, setIsSubmittingAdd] = useState(false)
+  const [addForm, setAddForm] = useState({
+    trackingNumber: '',
+    senderName: 'John Doe',
+    senderCity: 'New York',
+    senderCountry: 'United States',
+    recipientName: 'Sarah Jenkins',
+    recipientCity: 'London',
+    recipientCountry: 'United Kingdom',
+    serviceType: 'Express Courier',
+    weight: '5.0',
+    bypassCalculator: false,
+    customAmount: '165.00',
+    status: 'IN_TRANSIT',
+    currentLocation: 'JFK International Airport Hub, New York, US',
+    remarks: 'Consignment booked with admin shipment controls.',
+  })
+
+  const openAddModal = () => {
+    const randomTrk = 'SDP' + Math.random().toString(36).substring(2, 7).toUpperCase() + Math.random().toString(36).substring(2, 7).toUpperCase()
+    const initWeight = '5.0'
+    const initAmount = ((parseFloat(initWeight) || 5) * 25 + 40).toFixed(2)
+    setAddForm({
+      trackingNumber: randomTrk,
+      senderName: 'John Doe',
+      senderCity: 'New York',
+      senderCountry: 'United States',
+      recipientName: 'Sarah Jenkins',
+      recipientCity: 'London',
+      recipientCountry: 'United Kingdom',
+      serviceType: 'Express Courier',
+      weight: initWeight,
+      bypassCalculator: false,
+      customAmount: initAmount,
+      status: 'IN_TRANSIT',
+      currentLocation: 'JFK International Airport Hub, New York, US',
+      remarks: 'Consignment booked with admin shipment controls.',
+    })
+    setIsAddModalOpen(true)
+  }
+
+  const handleAddWeightChange = (newWeight: string) => {
+    const w = parseFloat(newWeight) || 0
+    if (!addForm.bypassCalculator) {
+      const calculated = Math.round((w * 25 + 40) * 100) / 100
+      setAddForm((prev) => ({ ...prev, weight: newWeight, customAmount: calculated.toFixed(2) }))
+    } else {
+      setAddForm((prev) => ({ ...prev, weight: newWeight }))
+    }
+  }
+
+  const handleAddBypassToggle = (bypassed: boolean) => {
+    if (!bypassed) {
+      const w = parseFloat(addForm.weight) || 0
+      const calculated = Math.round((w * 25 + 40) * 100) / 100
+      setAddForm((prev) => ({ ...prev, bypassCalculator: false, customAmount: calculated.toFixed(2) }))
+    } else {
+      setAddForm((prev) => ({ ...prev, bypassCalculator: true }))
+    }
+  }
+
+  const handleAddShipmentSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (isSubmittingAdd) return
+    setIsSubmittingAdd(true)
+
+    try {
+      const trk = (addForm.trackingNumber || '').trim().toUpperCase()
+      if (!trk) throw new Error('Tracking number is required')
+
+      const weightNum = parseFloat(addForm.weight) || 3.5
+      const finalAmount = parseFloat(addForm.customAmount) || (weightNum * 25 + 40)
+      const origin = addForm.senderCity.trim() || 'New York'
+      const destination = addForm.recipientCity.trim() || 'London'
+
+      const shipmentPayload = {
+        trackingNumber: trk,
+        senderName: addForm.senderName.trim() || 'Sender',
+        senderCity: origin,
+        origin: origin,
+        originCity: origin,
+        senderCountry: addForm.senderCountry.trim() || 'United States',
+        recipientName: addForm.recipientName.trim() || 'Recipient',
+        recipientCity: destination,
+        destination: destination,
+        destinationCity: destination,
+        recipientCountry: addForm.recipientCountry.trim() || 'United Kingdom',
+        serviceType: addForm.serviceType,
+        service: addForm.serviceType,
+        weight: weightNum,
+        packageWeight: weightNum,
+        amount: finalAmount,
+        totalAmount: finalAmount,
+        status: addForm.status,
+        currentLocation: addForm.currentLocation.trim() || `${origin}, Operations Dispatch`,
+        mapQuery: `${origin},${addForm.senderCountry}`,
+        showMap: true,
+        remarks: addForm.remarks ? [{
+          id: 'rem-1',
+          text: addForm.remarks,
+          category: 'Operational Update',
+          timestamp: new Date().toISOString(),
+          author: 'Admin',
+          public: true,
+        }] : [],
+      }
+
+      // 1. Post to API DB
+      try {
+        await fetch('/api/shipments', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...shipmentPayload,
+            weight: weightNum,
+            packageWeight: weightNum,
+            amount: finalAmount,
+            totalAmount: finalAmount,
+            originCity: origin,
+            destinationCity: destination,
+          }),
+        })
+      } catch (err) {
+        console.warn('API POST error:', err)
+      }
+
+      // 2. Save locally
+      saveLocalShipment({
+        ...shipmentPayload,
+        id: trk,
+        weight: `${weightNum} kg`,
+      })
+
+      // 3. Reload list
+      await loadShipments()
+
+      setIsAddModalOpen(false)
+      setSuccessToast(`Shipment ${trk} created successfully with custom price $${finalAmount.toFixed(2)} and weight ${weightNum} kg!`)
+      setTimeout(() => setSuccessToast(null), 4000)
+    } catch (err: any) {
+      alert(err.message || 'Failed to create shipment')
+    } finally {
+      setIsSubmittingAdd(false)
+    }
+  }
 
   // Load shipments from database API, localStorage, and seeds (respecting deleted blacklist)
   const loadShipments = async () => {
@@ -172,18 +346,34 @@ export default function AdminShipmentsPage() {
             const dId = (dbItem.id || '').toLowerCase()
             const dTrk = (dbItem.trackingNumber || '').toLowerCase()
             if (key && !deleted.includes(dId) && !deleted.includes(dTrk)) {
+              const rawSenderCity = dbItem.senderCity || dbItem.originCity || dbItem.origin || ''
+              const senderCity = rawSenderCity && !/\d+\s*kg/i.test(rawSenderCity) ? rawSenderCity : 'Origin'
+              const rawRecipientCity = dbItem.recipientCity || dbItem.destinationCity || dbItem.destination || ''
+              const recipientCity = rawRecipientCity && !/\d+\s*kg/i.test(rawRecipientCity) ? rawRecipientCity : 'Destination'
+
+              let rawWeight = dbItem.weight || dbItem.packageWeight
+              if (!rawWeight && Array.isArray(dbItem.packages) && dbItem.packages[0]?.weight) {
+                rawWeight = dbItem.packages[0].weight
+              }
+              const cleanWeight = rawWeight ? String(rawWeight).replace(/[^0-9.]/g, '') : '3.5'
+
               map.set(key, {
                 id: dbItem.id,
                 trackingNumber: dbItem.trackingNumber || key,
-                sender: `${dbItem.senderName || 'Sender'} (${dbItem.senderCity || 'Origin'})`,
-                recipient: `${dbItem.recipientName || 'Recipient'} (${dbItem.recipientCity || 'Destination'})`,
+                senderName: dbItem.senderName || 'Sender',
+                senderCity: senderCity,
+                recipientName: dbItem.recipientName || 'Recipient',
+                recipientCity: recipientCity,
+                sender: `${dbItem.senderName || 'Sender'} (${senderCity})`,
+                recipient: `${dbItem.recipientName || 'Recipient'} (${recipientCity})`,
                 service: dbItem.serviceType || 'Express Courier',
                 driver: 'Assigned Carrier Driver',
                 facility: 'Regional Hub',
                 status: dbItem.displayStatus || (dbItem.status === 'PROCESSING' ? 'PAYMENT_SUBMITTED' : (dbItem.status || 'PENDING_PAYMENT')),
                 amount: Number(dbItem.totalAmount) || 145.5,
-                currentLocation: `${dbItem.senderCity || 'Operations Dispatch'}, ${dbItem.senderCountry || 'US'}`,
-                mapQuery: `${dbItem.senderCity || 'New York'},${dbItem.senderCountry || 'USA'}`,
+                weight: cleanWeight ? `${cleanWeight} kg` : '3.5 kg',
+                currentLocation: `${senderCity}, ${dbItem.senderCountry || 'US'}`,
+                mapQuery: `${senderCity},${dbItem.senderCountry || 'USA'}`,
                 showMap: true,
                 remarks: [],
                 userName: dbItem.userName || dbItem.createdBy?.name || dbItem.senderName,
@@ -219,18 +409,35 @@ export default function AdminShipmentsPage() {
 
         const canonicalKey = existingKey || trk || sid
         const existing = map.get(canonicalKey) || {}
+
+        const rawSenderCity = s.senderCity || s.originCity || s.origin || existing.senderCity || ''
+        const senderCity = rawSenderCity && !/\d+\s*kg/i.test(rawSenderCity) ? rawSenderCity : (existing.senderCity || 'Origin')
+
+        const rawRecipientCity = s.recipientCity || s.destinationCity || s.destination || existing.recipientCity || ''
+        const recipientCity = rawRecipientCity && !/\d+\s*kg/i.test(rawRecipientCity) ? rawRecipientCity : (existing.recipientCity || 'Destination')
+
+        let rawWeight = s.weight || s.packageWeight
+        const cleanWeight = rawWeight
+          ? String(rawWeight).replace(/[^0-9.]/g, '')
+          : (existing.weight ? String(existing.weight).replace(/[^0-9.]/g, '') : '3.5')
+
         map.set(canonicalKey, {
           ...existing,
           ...s,
           id: existing.id || s.id || canonicalKey,
           trackingNumber: existing.trackingNumber || s.trackingNumber || canonicalKey,
-          sender: s.sender || `${s.senderName || 'Sender'} (${s.senderCity || 'Origin'})`,
-          recipient: s.recipient || `${s.recipientName || 'Recipient'} (${s.recipientCity || 'Destination'})`,
+          senderName: s.senderName || existing.senderName || 'Sender',
+          senderCity: senderCity,
+          recipientName: s.recipientName || existing.recipientName || 'Recipient',
+          recipientCity: recipientCity,
+          sender: `${s.senderName || existing.senderName || 'Sender'} (${senderCity})`,
+          recipient: `${s.recipientName || existing.recipientName || 'Recipient'} (${recipientCity})`,
           service: s.service || s.serviceType || existing.service || 'Express Courier',
           driver: s.driver || s.assignedDriver || existing.driver || 'Assigned Carrier Driver',
           facility: s.facility || s.assignedFacility || existing.facility || 'Regional Hub',
           status: s.status || existing.status || 'PENDING_PAYMENT',
           amount: Number(s.amount) || Number(s.totalAmount) || existing.amount || 145.5,
+          weight: cleanWeight ? `${cleanWeight} kg` : (existing.weight || '3.5 kg'),
           currentLocation: s.currentLocation || s.location || existing.currentLocation || 'Operations Dispatch',
           mapQuery: s.mapQuery || existing.mapQuery || '',
           showMap: s.showMap !== undefined ? Boolean(s.showMap) : existing.showMap !== undefined ? Boolean(existing.showMap) : true,
@@ -303,11 +510,17 @@ export default function AdminShipmentsPage() {
       } catch {}
     }
 
+    const weightClean = shipment.weight ? String(shipment.weight).replace(/[^0-9.]/g, '') : '3.5'
+
     setEditForm({
       id: shipment.id,
       trackingNumber: shipment.trackingNumber,
       status: shipment.status || 'IN_TRANSIT',
-      service: shipment.service || 'Express Courier',
+      service: shipment.service || shipment.serviceType || 'Express Courier',
+      weight: weightClean,
+      amount: Number(shipment.amount) || Number(shipment.totalAmount) || 145.5,
+      senderCity: shipment.senderCity || '',
+      recipientCity: shipment.recipientCity || '',
       currentLocation: shipment.currentLocation || '',
       mapQuery: shipment.mapQuery || '',
       showMap: shipment.showMap !== undefined ? Boolean(shipment.showMap) : true,
@@ -353,9 +566,27 @@ export default function AdminShipmentsPage() {
 
     setIsSavingEdit(true)
     try {
+      const cleanWeightNum = parseFloat(editForm.weight) || 3.5
+      const cleanAmountNum = parseFloat(String(editForm.amount)) || 145.5
+      const origin = editForm.senderCity.trim() || editingShipment.senderCity || 'Origin'
+      const destination = editForm.recipientCity.trim() || editingShipment.recipientCity || 'Destination'
+
       const updatedShipment = {
         ...editingShipment,
         status: editForm.status,
+        service: editForm.service,
+        serviceType: editForm.service,
+        weight: `${cleanWeightNum} kg`,
+        amount: cleanAmountNum,
+        totalAmount: cleanAmountNum,
+        senderCity: origin,
+        origin: origin,
+        originCity: origin,
+        recipientCity: destination,
+        destination: destination,
+        destinationCity: destination,
+        sender: `${editingShipment.senderName || 'Sender'} (${origin})`,
+        recipient: `${editingShipment.recipientName || 'Recipient'} (${destination})`,
         currentLocation: editForm.currentLocation,
         mapQuery: editForm.mapQuery,
         showMap: editForm.showMap,
@@ -373,6 +604,17 @@ export default function AdminShipmentsPage() {
           id: editForm.id,
           trackingNumber: editForm.trackingNumber,
           status: editForm.status,
+          serviceType: editForm.service,
+          weight: cleanWeightNum,
+          packageWeight: cleanWeightNum,
+          amount: cleanAmountNum,
+          totalAmount: cleanAmountNum,
+          senderCity: origin,
+          origin: origin,
+          originCity: origin,
+          recipientCity: destination,
+          destination: destination,
+          destinationCity: destination,
           currentLocation: editForm.currentLocation,
           mapQuery: editForm.mapQuery,
           showMap: editForm.showMap,
@@ -429,8 +671,14 @@ export default function AdminShipmentsPage() {
               className="w-full pl-10 pr-4 py-2 rounded-xl bg-slate-900 border border-slate-800 text-xs text-white focus:outline-none focus:ring-1 focus:ring-[#6B2737]"
             />
           </div>
+          <Button
+            onClick={openAddModal}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-md cursor-pointer"
+          >
+            <Plus className="w-4 h-4" /> Add Shipment (Bypass)
+          </Button>
           <Button asChild className="bg-[#6B2737] hover:bg-[#521b28] text-white font-bold text-xs">
-            <Link href="/admin/tracking-generator">+ Create New AWB</Link>
+            <Link href="/admin/tracking-generator">+ Tracking Generator</Link>
           </Button>
         </div>
       </div>
@@ -507,7 +755,10 @@ export default function AdminShipmentsPage() {
                     </td>
                     <td className="p-3">
                       <span className="font-medium text-slate-200 block">{s.service}</span>
-                      <span className="text-[10px] text-amber-400/80">{s.driver}</span>
+                      <span className="text-[10px] text-amber-400/80 block">{s.driver}</span>
+                      <span className="text-[10px] text-slate-400 block mt-0.5">
+                        Weight: <span className="text-white font-bold">{s.weight || '3.5 kg'}</span>
+                      </span>
                     </td>
                     <td className="p-3">
                       <div className="flex items-center gap-2">
@@ -717,6 +968,68 @@ export default function AdminShipmentsPage() {
                 </div>
               </div>
 
+              {/* SECTION: Consignment Weight & Pricing Overrides */}
+              <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-4">
+                <h3 className="font-bold text-white text-xs uppercase tracking-wider flex items-center gap-1.5">
+                  <DollarSign className="w-4 h-4 text-emerald-400" />
+                  Consignment Weight &amp; Pricing Overrides
+                </h3>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-semibold mb-1 text-slate-400 flex items-center gap-1">
+                      <Scale className="w-3.5 h-3.5 text-blue-400" /> Package Weight (kg)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      min="0.1"
+                      value={editForm.weight}
+                      onChange={(e) => setEditForm({ ...editForm, weight: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white font-mono text-xs focus:ring-1 focus:ring-[#6B2737]"
+                      placeholder="e.g. 5.0"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-semibold mb-1 text-slate-400 flex items-center gap-1">
+                      <DollarSign className="w-3.5 h-3.5 text-emerald-400" /> Shipment Cost ($ USD)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={editForm.amount}
+                      onChange={(e) => setEditForm({ ...editForm, amount: parseFloat(e.target.value) || 0 })}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-emerald-400 font-mono font-bold text-xs focus:ring-1 focus:ring-[#6B2737]"
+                      placeholder="e.g. 145.50"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-semibold mb-1 text-slate-400">Origin / Sender City</label>
+                    <input
+                      type="text"
+                      value={editForm.senderCity}
+                      onChange={(e) => setEditForm({ ...editForm, senderCity: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs focus:ring-1 focus:ring-[#6B2737]"
+                      placeholder="e.g. New York"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-semibold mb-1 text-slate-400">Destination / Recipient City</label>
+                    <input
+                      type="text"
+                      value={editForm.recipientCity}
+                      onChange={(e) => setEditForm({ ...editForm, recipientCity: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs focus:ring-1 focus:ring-[#6B2737]"
+                      placeholder="e.g. London"
+                    />
+                  </div>
+                </div>
+              </div>
+
               {/* SECTION: Timeline Events Editor */}
               <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-4">
                 <div className="flex items-center justify-between border-b border-slate-800 pb-2">
@@ -849,6 +1162,289 @@ export default function AdminShipmentsPage() {
               </div>
             </form>
           </div>
+        </div>
+      )}
+
+      {/* ─── DIRECT ADD SHIPMENT MODAL (FULL MANUAL BYPASS CONTROLS) ─── */}
+      {isAddModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto animate-in fade-in duration-200">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col space-y-5 my-8">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+              <div>
+                <h2 className="text-lg font-black text-white flex items-center gap-2">
+                  <Box className="w-5 h-5 text-emerald-400" />
+                  Add New Shipment (Bypass Controls)
+                </h2>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  Direct consignment registration with live calculator bypass and custom pricing.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAddModalOpen(false)}
+                className="text-slate-400 hover:text-white p-2 rounded-xl hover:bg-slate-800 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Form */}
+            <form onSubmit={handleAddShipmentSubmit} className="overflow-y-auto flex-1 pr-1 space-y-5 text-xs text-slate-300">
+              {/* Tracking & Service */}
+              <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-semibold mb-1 text-slate-400">AWB / Tracking Number</label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        required
+                        value={addForm.trackingNumber}
+                        onChange={(e) => setAddForm({ ...addForm, trackingNumber: e.target.value.toUpperCase() })}
+                        placeholder="e.g. SDP8F4K92LM381"
+                        className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-emerald-400 font-mono font-bold text-xs focus:ring-1 focus:ring-emerald-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newTrk = 'SDP' + Math.random().toString(36).substring(2, 7).toUpperCase() + Math.random().toString(36).substring(2, 7).toUpperCase()
+                          setAddForm({ ...addForm, trackingNumber: newTrk })
+                        }}
+                        className="px-2.5 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-[10px] font-bold shrink-0"
+                        title="Generate Random AWB"
+                      >
+                        Roll
+                      </button>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block font-semibold mb-1 text-slate-400">Service Type</label>
+                    <select
+                      value={addForm.serviceType}
+                      onChange={(e) => setAddForm({ ...addForm, serviceType: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs focus:ring-1 focus:ring-[#6B2737]"
+                    >
+                      <option value="Express Courier">Express Courier</option>
+                      <option value="Standard Courier Service">Standard Courier Service</option>
+                      <option value="Over Night Express Service">Over Night Express Service</option>
+                      <option value="Usual Courier Service">Usual Courier Service</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Sender & Recipient */}
+              <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-3">
+                <h3 className="font-bold text-white text-xs uppercase tracking-wider">Sender &amp; Recipient Information</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <p className="text-[10px] text-blue-400 font-bold uppercase tracking-wider">Origin / Sender</p>
+                    <input
+                      type="text"
+                      required
+                      value={addForm.senderName}
+                      onChange={(e) => setAddForm({ ...addForm, senderName: e.target.value })}
+                      placeholder="Sender Name"
+                      className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs"
+                    />
+                    <input
+                      type="text"
+                      required
+                      value={addForm.senderCity}
+                      onChange={(e) => setAddForm({ ...addForm, senderCity: e.target.value })}
+                      placeholder="Sender City (Origin)"
+                      className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs"
+                    />
+                    <input
+                      type="text"
+                      value={addForm.senderCountry}
+                      onChange={(e) => setAddForm({ ...addForm, senderCountry: e.target.value })}
+                      placeholder="Sender Country"
+                      className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider">Destination / Recipient</p>
+                    <input
+                      type="text"
+                      required
+                      value={addForm.recipientName}
+                      onChange={(e) => setAddForm({ ...addForm, recipientName: e.target.value })}
+                      placeholder="Recipient Name"
+                      className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs"
+                    />
+                    <input
+                      type="text"
+                      required
+                      value={addForm.recipientCity}
+                      onChange={(e) => setAddForm({ ...addForm, recipientCity: e.target.value })}
+                      placeholder="Recipient City (Destination)"
+                      className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs"
+                    />
+                    <input
+                      type="text"
+                      value={addForm.recipientCountry}
+                      onChange={(e) => setAddForm({ ...addForm, recipientCountry: e.target.value })}
+                      placeholder="Recipient Country"
+                      className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Package Weight & Rate Calculator / Bypass Control */}
+              <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-bold text-white text-xs uppercase tracking-wider flex items-center gap-1.5">
+                    <Calculator className="w-4 h-4 text-emerald-400" />
+                    Rate Calculator &amp; Pricing Control
+                  </h3>
+                  <label className="flex items-center gap-2 cursor-pointer bg-slate-900 px-3 py-1 rounded-xl border border-slate-800 hover:border-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={addForm.bypassCalculator}
+                      onChange={(e) => handleAddBypassToggle(e.target.checked)}
+                      className="rounded border-slate-700 text-emerald-500 focus:ring-0 cursor-pointer"
+                    />
+                    <span className="text-[11px] font-bold text-emerald-400">Bypass Calculator</span>
+                  </label>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-semibold mb-1 text-slate-400 flex items-center gap-1">
+                      <Scale className="w-3.5 h-3.5 text-blue-400" /> Weight (kg)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      min="0.1"
+                      required
+                      value={addForm.weight}
+                      onChange={(e) => handleAddWeightChange(e.target.value)}
+                      placeholder="e.g. 5.0"
+                      className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white font-mono text-xs focus:ring-1 focus:ring-emerald-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-semibold mb-1 text-slate-400 flex items-center gap-1">
+                      <DollarSign className="w-3.5 h-3.5 text-emerald-400" /> Total Shipment Cost ($ USD)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      required
+                      value={addForm.customAmount}
+                      onChange={(e) => setAddForm({ ...addForm, customAmount: e.target.value })}
+                      disabled={!addForm.bypassCalculator}
+                      placeholder="e.g. 165.00"
+                      className={`w-full px-3 py-2 rounded-xl border font-mono font-bold text-xs ${
+                        addForm.bypassCalculator
+                          ? 'bg-slate-900 border-emerald-500/50 text-emerald-400 focus:ring-1 focus:ring-emerald-500 cursor-text'
+                          : 'bg-slate-900/60 border-slate-800 text-slate-400 cursor-not-allowed'
+                      }`}
+                    />
+                  </div>
+                </div>
+
+                <p className="text-[10px] text-slate-400">
+                  {addForm.bypassCalculator ? (
+                    <span className="text-emerald-400 font-semibold">
+                      ✓ Full Manual Control Active: You can freely set any custom shipment cost, bypassing the rate calculator.
+                    </span>
+                  ) : (
+                    <span className="text-slate-400">
+                      Standard Rate formula: (Weight × $25) + $40 base. Toggle &quot;Bypass Calculator&quot; above to set custom price.
+                    </span>
+                  )}
+                </p>
+              </div>
+
+              {/* Status & Location */}
+              <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-semibold mb-1 text-slate-400">Initial Status</label>
+                    <select
+                      value={addForm.status}
+                      onChange={(e) => setAddForm({ ...addForm, status: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white font-bold text-xs"
+                    >
+                      {ALL_STATUSES.map((st) => (
+                        <option key={st} value={st}>
+                          {st.replace(/_/g, ' ')}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block font-semibold mb-1 text-slate-400">Current Checkpoint Location</label>
+                    <input
+                      type="text"
+                      value={addForm.currentLocation}
+                      onChange={(e) => setAddForm({ ...addForm, currentLocation: e.target.value })}
+                      placeholder="e.g. JFK International Airport Hub, NY"
+                      className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block font-semibold mb-1 text-slate-400">Operational Note / Consignment Remarks</label>
+                  <input
+                    type="text"
+                    value={addForm.remarks}
+                    onChange={(e) => setAddForm({ ...addForm, remarks: e.target.value })}
+                    placeholder="e.g. Package inspected and cleared for express dispatch."
+                    className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs"
+                  />
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-800">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsAddModalOpen(false)}
+                  disabled={isSubmittingAdd}
+                  className="border-slate-800 text-slate-400 hover:bg-slate-800 text-xs"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={isSubmittingAdd}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-6 text-xs shadow-md"
+                >
+                  {isSubmittingAdd ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 mr-1.5 animate-spin" /> Creating Shipment...
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-4 h-4 mr-1.5" /> Dispatch Shipment
+                    </>
+                  )}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Floating Success Toast */}
+      {successToast && (
+        <div className="fixed bottom-6 right-6 z-50 bg-emerald-600 text-white px-5 py-3 rounded-2xl shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-3 duration-200">
+          <CheckCircle2 className="w-5 h-5 text-white shrink-0" />
+          <span className="text-xs font-bold">{successToast}</span>
+          <button onClick={() => setSuccessToast(null)} className="ml-2 text-white/80 hover:text-white">
+            <X className="w-4 h-4" />
+          </button>
         </div>
       )}
     </div>

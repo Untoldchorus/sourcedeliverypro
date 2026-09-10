@@ -209,6 +209,28 @@ export function saveLocalShipment(shipment: any) {
       shipment.paid = false
     }
 
+    // Normalize weight safely
+    if (shipment.weight !== undefined && shipment.weight !== null && shipment.weight !== '') {
+      const parsedW = parseFloat(String(shipment.weight).replace(/[^0-9.]/g, ''))
+      if (!isNaN(parsedW)) {
+        shipment.weight = parsedW
+      }
+    }
+
+    // Keep origin and senderCity in sync (prevent weight or corrupt values from entering origin)
+    if (shipment.senderCity && (!shipment.origin || shipment.origin.includes('kg'))) {
+      shipment.origin = shipment.senderCity
+    } else if (shipment.origin && (!shipment.senderCity || shipment.senderCity.includes('kg'))) {
+      shipment.senderCity = shipment.origin
+    }
+
+    // Keep destination and recipientCity in sync
+    if (shipment.recipientCity && !shipment.destination) {
+      shipment.destination = shipment.recipientCity
+    } else if (shipment.destination && !shipment.recipientCity) {
+      shipment.recipientCity = shipment.destination
+    }
+
     const index = existing.findIndex((s) => s.id === id || s.trackingNumber === id || (trk && s.trackingNumber === trk))
     if (index >= 0) {
       existing[index] = { ...existing[index], ...shipment }
@@ -362,6 +384,78 @@ export function deleteLocalReceipt(idOrNumber: string) {
   }
 }
 
+export type ItemStatus = 'PAID' | 'NOT_PAID'
+
+export interface ReceiptLineItem {
+  id: string
+  description: string
+  amount: number
+  status: ItemStatus
+  enabled: boolean
+}
+
+export interface AdminReceipt {
+  id: string
+  receiptNumber: string
+  version: number
+  customerName: string
+  customerEmail: string
+  trackingNumber: string
+  paymentRef: string
+  paymentMethod: string
+  subtotal: number
+  tax: number
+  total: number
+  status: 'DRAFT' | 'ISSUED' | 'PAID' | 'PARTIALLY_PAID' | 'VOID' | 'REFUNDED'
+  createdDate: string
+  notes?: string
+  items?: ReceiptLineItem[]
+  receiptEmailed?: boolean
+  receiptEmailedTo?: string
+}
+
+export const AVAILABLE_DESCRIPTIONS = [
+  'Consignment Freight Charge & Handling',
+  'Customs Clearance, Handling & Insurance Tax',
+  'Standard Courier Service',
+  'Usual Courier Service',
+  'Over Night Express Service',
+] as const
+
+export const DEFAULT_DESCRIPTION_AMOUNTS: Record<string, number> = {
+  'Consignment Freight Charge & Handling': 120.00,
+  'Customs Clearance, Handling & Insurance Tax': 12.00,
+  'Standard Courier Service': 45.00,
+  'Usual Courier Service': 65.00,
+  'Over Night Express Service': 95.00,
+}
+
+export function getReceiptItems(rcpt: Partial<AdminReceipt> | null | undefined): ReceiptLineItem[] {
+  if (Array.isArray(rcpt?.items) && rcpt!.items.length > 0) {
+    return rcpt!.items
+  }
+  const isActuallyPaid = rcpt?.status === 'PAID' || rcpt?.status === 'ISSUED'
+  const sub = typeof rcpt?.subtotal === 'number' ? rcpt.subtotal : 120.00
+  const tax = typeof rcpt?.tax === 'number' ? rcpt.tax : 12.00
+
+  return [
+    {
+      id: 'default-item-1',
+      description: 'Consignment Freight Charge & Handling',
+      amount: sub,
+      status: isActuallyPaid ? 'PAID' : 'NOT_PAID',
+      enabled: true,
+    },
+    {
+      id: 'default-item-2',
+      description: 'Customs Clearance, Handling & Insurance Tax',
+      amount: tax,
+      status: isActuallyPaid ? 'PAID' : 'NOT_PAID',
+      enabled: true,
+    },
+  ]
+}
+
 export function getDeletedUsers(): string[] {
   if (typeof window === 'undefined') return []
   try {
@@ -449,6 +543,7 @@ export async function getUnifiedShipments(): Promise<any[]> {
           senderEmail: dbItem.senderEmail || '',
           senderCity: dbItem.senderCity || '',
           senderCountry: dbItem.senderCountry || '',
+          origin: dbItem.senderCity || '',
           recipient: dbItem.recipientName || '',
           recipientName: dbItem.recipientName || '',
           recipientEmail: dbItem.recipientEmail || '',
@@ -518,6 +613,15 @@ export async function getUnifiedShipments(): Promise<any[]> {
           finalStatus = 'PENDING_PAYMENT'
         }
 
+        const rawWeight = localItem.weight !== undefined ? localItem.weight : existing.weight
+        const parsedWeight = parseFloat(String(rawWeight || '3.5').replace(/[^0-9.]/g, ''))
+        const resolvedWeight = !isNaN(parsedWeight) && parsedWeight > 0 ? `${parsedWeight} kg` : '3.5 kg'
+
+        const resolvedSenderCity = localItem.senderCity || localItem.origin || existing.senderCity || ''
+        const resolvedOrigin = localItem.origin || localItem.senderCity || existing.origin || ''
+        const resolvedRecipientCity = localItem.recipientCity || localItem.destination || existing.recipientCity || ''
+        const resolvedDestination = localItem.destination || localItem.recipientCity || existing.destination || ''
+
         map.set(key, {
           ...existing,
           ...localItem,
@@ -526,12 +630,13 @@ export async function getUnifiedShipments(): Promise<any[]> {
           sender: localItem.sender || localItem.senderName || existing.sender || '',
           senderName: localItem.senderName || existing.senderName || '',
           senderEmail: localItem.senderEmail || existing.senderEmail || '',
-          senderCity: localItem.senderCity || existing.senderCity || '',
+          senderCity: resolvedSenderCity,
+          origin: resolvedOrigin,
           recipient: localItem.recipient || localItem.recipientName || existing.recipient || '',
           recipientName: localItem.recipientName || existing.recipientName || '',
           recipientEmail: localItem.recipientEmail || existing.recipientEmail || '',
-          recipientCity: localItem.recipientCity || existing.recipientCity || '',
-          destination: (localItem.recipientCity || existing.recipientCity) ? `${localItem.recipientCity || existing.recipientCity}` : '',
+          recipientCity: resolvedRecipientCity,
+          destination: resolvedDestination,
           service: localItem.serviceType || localItem.service || existing.service || 'Standard',
           serviceType: localItem.serviceType || localItem.service || existing.serviceType || 'Standard',
           status: finalStatus,
@@ -540,7 +645,7 @@ export async function getUnifiedShipments(): Promise<any[]> {
           createdAt: localItem.createdAt || existing.createdAt,
           estimated: localItem.estimated || localItem.estimatedDelivery || existing.estimated || '3-5 Days',
           estimatedDelivery: localItem.estimated || localItem.estimatedDelivery || existing.estimatedDelivery || '3-5 Days',
-          weight: localItem.weight ? (localItem.weight.toString().includes('kg') ? localItem.weight : `${localItem.weight} kg`) : existing.weight || '3.5 kg',
+          weight: resolvedWeight,
           amount: (localItem.totalAmount || localItem.amount) ? parseFloat(localItem.totalAmount || localItem.amount) : existing.amount || 0,
           totalAmount: (localItem.totalAmount || localItem.amount) ? parseFloat(localItem.totalAmount || localItem.amount) : existing.totalAmount || 0,
           userId: localItem.userId || existing.userId || '',

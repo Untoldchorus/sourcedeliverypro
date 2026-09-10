@@ -157,26 +157,35 @@ export default function AdminEditEverythingShipmentPage() {
           )
           const resolvedPaymentStatus = found.paymentStatus || (isActuallyPaid ? 'PAID' : 'PENDING')
 
-          setFormData((prev) => ({
-            ...prev,
-            ...found,
-            id: found.id || found.trackingNumber || shipmentId,
-            trackingNumber: found.trackingNumber || found.awb || prev.trackingNumber,
-            status: found.status || prev.status || 'PENDING_PAYMENT',
-            paymentStatus: resolvedPaymentStatus,
-            serviceType: found.serviceType || found.service || prev.serviceType,
-            currentLocation: found.currentLocation || found.location || prev.currentLocation,
-            mapQuery: found.mapQuery || prev.mapQuery,
-            showMap: found.showMap !== undefined ? Boolean(found.showMap) : prev.showMap,
-            senderName: found.senderName || found.sender || prev.senderName,
-            senderCity: found.senderCity || prev.senderCity,
-            recipientName: found.recipientName || found.recipient || prev.recipientName,
-            recipientCity: found.recipientCity || prev.recipientCity,
-            weight: found.weight ? found.weight.toString().replace(' kg', '') : prev.weight,
-            totalAmount: (found.totalAmount || found.amount || prev.totalAmount).toString(),
-            remarks: Array.isArray(found.remarks) ? found.remarks : prev.remarks,
-            events: Array.isArray(found.events) ? found.events : prev.events,
-          }))
+          setFormData((prev) => {
+            const rawW = found.weight !== undefined ? found.weight : prev.weight
+            const cleanW = typeof rawW === 'number' ? rawW.toString() : String(rawW).replace(/[^0-9.]/g, '') || '3.5'
+            const resolvedSenderCity = found.senderCity || found.originCity || (found.origin && !found.origin.toString().toLowerCase().endsWith('kg') ? found.origin : '') || prev.senderCity
+            const resolvedRecipientCity = found.recipientCity || found.destinationCity || found.destination || prev.recipientCity
+
+            return {
+              ...prev,
+              ...found,
+              id: found.id || found.trackingNumber || shipmentId,
+              trackingNumber: found.trackingNumber || found.awb || prev.trackingNumber,
+              status: found.status || prev.status || 'PENDING_PAYMENT',
+              paymentStatus: resolvedPaymentStatus,
+              serviceType: found.serviceType || found.service || prev.serviceType,
+              currentLocation: found.currentLocation || found.location || prev.currentLocation,
+              mapQuery: found.mapQuery || prev.mapQuery,
+              showMap: found.showMap !== undefined ? Boolean(found.showMap) : prev.showMap,
+              senderName: found.senderName || found.sender || prev.senderName,
+              senderCity: resolvedSenderCity,
+              origin: resolvedSenderCity,
+              recipientName: found.recipientName || found.recipient || prev.recipientName,
+              recipientCity: resolvedRecipientCity,
+              destination: resolvedRecipientCity,
+              weight: cleanW,
+              totalAmount: (found.totalAmount || found.amount || prev.totalAmount).toString(),
+              remarks: Array.isArray(found.remarks) ? found.remarks : prev.remarks,
+              events: Array.isArray(found.events) ? found.events : prev.events,
+            }
+          })
         }
       } catch (err) {
         console.error('Error loading shipment for edit:', err)
@@ -193,10 +202,19 @@ export default function AdminEditEverythingShipmentPage() {
     setIsSaving(true)
     try {
       const isPaid = formData.paymentStatus === 'PAID'
+      const parsedWeight = parseFloat(String(formData.weight).replace(/[^0-9.]/g, ''))
+      const cleanWeight = !isNaN(parsedWeight) && parsedWeight > 0 ? parsedWeight : 3.5
+      const parsedAmount = parseFloat(formData.totalAmount) || 0
+
       const updatedShipment = {
         ...formData,
-        amount: parseFloat(formData.totalAmount) || 0,
-        totalAmount: parseFloat(formData.totalAmount) || 0,
+        weight: cleanWeight,
+        senderCity: formData.senderCity,
+        origin: formData.senderCity,
+        recipientCity: formData.recipientCity,
+        destination: formData.recipientCity,
+        amount: parsedAmount,
+        totalAmount: parsedAmount,
         paymentStatus: formData.paymentStatus,
         paid: isPaid,
         // Prevent accidental approval if payment status is still PENDING
@@ -217,13 +235,15 @@ export default function AdminEditEverythingShipmentPage() {
           status: updatedShipment.status,
           paymentStatus: updatedShipment.paymentStatus,
           serviceType: updatedShipment.serviceType,
-          weight: updatedShipment.weight,
-          amount: updatedShipment.totalAmount,
-          totalAmount: updatedShipment.totalAmount,
+          weight: cleanWeight,
+          amount: parsedAmount,
+          totalAmount: parsedAmount,
           senderName: updatedShipment.senderName,
           senderCity: updatedShipment.senderCity,
+          origin: updatedShipment.senderCity,
           recipientName: updatedShipment.recipientName,
           recipientCity: updatedShipment.recipientCity,
+          destination: updatedShipment.recipientCity,
           currentLocation: updatedShipment.currentLocation,
           mapQuery: updatedShipment.mapQuery,
           showMap: updatedShipment.showMap !== undefined ? Boolean(updatedShipment.showMap) : true,

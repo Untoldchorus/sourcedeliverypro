@@ -8,18 +8,19 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { deleteLocalShipment, getUnifiedShipments } from '@/lib/payments/manualOptions'
+import { deleteLocalShipment, getUnifiedShipments, addDeletedShipment } from '@/lib/payments/manualOptions'
 import { useSession } from 'next-auth/react'
 
 interface Shipment {
   id: string
   trackingNumber: string
+  shipmentNumber?: string
   sender: string
   recipient: string
   senderCity: string
   recipientCity: string
   service: string
-  status: 'PENDING' | 'IN_TRANSIT' | 'DELIVERED' | 'CANCELLED' | 'PENDING_PAYMENT' | 'PAYMENT_SUBMITTED' | 'LABEL_CREATED'
+  status: string
   created: string
   estimated: string
   weight: string

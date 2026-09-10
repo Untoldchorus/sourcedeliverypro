@@ -11,9 +11,9 @@ import { formatCurrency } from '@/lib/utils'
 import { getLocalReceipts, saveLocalReceipt, deleteLocalReceipt, getDeletedReceipts, addDeletedReceipt } from '@/lib/payments/manualOptions'
 import { downloadReceiptAsImage, downloadReceiptAsPdf, generateReceiptPdfBase64 } from '@/lib/receiptDownload'
 
-export type ItemStatus = 'PAID' | 'NOT_PAID'
+type ItemStatus = 'PAID' | 'NOT_PAID'
 
-export interface ReceiptLineItem {
+interface ReceiptLineItem {
   id: string
   description: string
   amount: number
@@ -21,7 +21,7 @@ export interface ReceiptLineItem {
   enabled: boolean
 }
 
-export interface AdminReceipt {
+interface AdminReceipt {
   id: string
   receiptNumber: string
   version: number
@@ -41,7 +41,7 @@ export interface AdminReceipt {
   receiptEmailedTo?: string
 }
 
-export const AVAILABLE_DESCRIPTIONS = [
+const AVAILABLE_DESCRIPTIONS = [
   'Consignment Freight Charge & Handling',
   'Customs Clearance, Handling & Insurance Tax',
   'Standard Courier Service',
@@ -49,7 +49,7 @@ export const AVAILABLE_DESCRIPTIONS = [
   'Over Night Express Service',
 ] as const
 
-export const DEFAULT_DESCRIPTION_AMOUNTS: Record<string, number> = {
+const DEFAULT_DESCRIPTION_AMOUNTS: Record<string, number> = {
   'Consignment Freight Charge & Handling': 120.00,
   'Customs Clearance, Handling & Insurance Tax': 12.00,
   'Standard Courier Service': 45.00,
@@ -57,7 +57,7 @@ export const DEFAULT_DESCRIPTION_AMOUNTS: Record<string, number> = {
   'Over Night Express Service': 95.00,
 }
 
-export function getReceiptItems(rcpt: Partial<AdminReceipt> | null | undefined): ReceiptLineItem[] {
+function getReceiptItems(rcpt: Partial<AdminReceipt> | null | undefined): ReceiptLineItem[] {
   if (rcpt?.items && Array.isArray(rcpt.items) && rcpt.items.length > 0) {
     const existingDescMap = new Map<string, ReceiptLineItem>()
     for (const it of rcpt.items) {

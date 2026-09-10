@@ -1,8 +1,8 @@
 'use client'
 
 import { formatCurrency } from '@/lib/utils'
-import type { AdminReceipt } from '@/app/admin/receipts/page'
-import { getReceiptItems } from '@/app/admin/receipts/page'
+import type { AdminReceipt } from '@/lib/payments/manualOptions'
+import { getReceiptItems } from '@/lib/payments/manualOptions'
 
 /**
  * Renders an AdminReceipt to an in-memory high-DPI HTMLCanvasElement.
@@ -483,7 +483,7 @@ export async function downloadReceiptAsPdf(receipt: AdminReceipt): Promise<void>
     const jpegBytes = new Uint8Array(arrayBuffer)
     const pdfBytes = buildPdfFromJpeg(jpegBytes, canvas.width, canvas.height)
 
-    const blob = new Blob([pdfBytes], { type: 'application/pdf' })
+    const blob = new Blob([pdfBytes as any], { type: 'application/pdf' })
     const url = URL.createObjectURL(blob)
     const filename = `Receipt-${receipt.receiptNumber || 'SDP'}.pdf`
 

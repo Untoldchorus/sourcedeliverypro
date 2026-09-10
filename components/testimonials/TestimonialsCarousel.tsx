@@ -388,10 +388,9 @@ export function TestimonialsCarousel() {
                       <div className="min-w-0">
                         <div className="flex items-center gap-1.5">
                           <h3 className="font-bold text-sm text-slate-900 truncate">{item.name}</h3>
-                          <CheckCircle2
-                            className="w-3.5 h-3.5 text-emerald-600 shrink-0"
-                            title="Verified Consignment Shipper"
-                          />
+                          <span title="Verified Consignment Shipper" className="inline-flex">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                          </span>
                         </div>
                         <p className="text-xs text-slate-500 truncate">{item.role}</p>
                         <p className="text-[11px] font-medium text-slate-400 truncate">{item.company}</p>
