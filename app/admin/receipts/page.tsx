@@ -127,6 +127,15 @@ export function getReceiptItems(rcpt: Partial<AdminReceipt> | null | undefined):
 
 const DEFAULT_RECEIPTS: AdminReceipt[] = []
 
+const statusBadges: Record<string, string> = {
+  PAID: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+  ISSUED: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
+  DRAFT: 'bg-slate-500/10 text-slate-400 border-slate-500/20',
+  PARTIALLY_PAID: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+  VOID: 'bg-red-500/10 text-red-400 border-red-500/20',
+  REFUNDED: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
+}
+
 export default function AdminReceiptsPage() {
   const [receipts, setReceipts] = useState<AdminReceipt[]>([])
   const [search, setSearch] = useState('')
@@ -377,14 +386,15 @@ export default function AdminReceiptsPage() {
 
   // Filtered list
   const filtered = receipts.filter((r) => {
+    if (!r) return false
     const matchesStatus = filterStatus === 'ALL' || r.status === filterStatus
-    const term = search.toLowerCase()
+    const term = (search || '').toLowerCase()
     const matchesSearch =
-      r.receiptNumber.toLowerCase().includes(term) ||
-      r.customerName.toLowerCase().includes(term) ||
-      r.customerEmail.toLowerCase().includes(term) ||
-      r.trackingNumber.toLowerCase().includes(term) ||
-      r.paymentRef.toLowerCase().includes(term)
+      (r.receiptNumber || '').toLowerCase().includes(term) ||
+      (r.customerName || '').toLowerCase().includes(term) ||
+      (r.customerEmail || '').toLowerCase().includes(term) ||
+      (r.trackingNumber || '').toLowerCase().includes(term) ||
+      (r.paymentRef || '').toLowerCase().includes(term)
     return matchesStatus && matchesSearch
   })
 
@@ -464,25 +474,25 @@ export default function AdminReceiptsPage() {
               {filtered.map((r) => (
                 <tr key={r.id} className="hover:bg-slate-800/40 transition-colors">
                   <td className="p-3 font-mono font-bold text-white">
-                    {r.receiptNumber}
+                    {r.receiptNumber || 'N/A'}
                   </td>
                   <td className="p-3">
-                    <span className="font-bold text-white block text-sm">{r.customerName}</span>
-                    <span className="text-[10px] text-slate-400">{r.customerEmail}</span>
+                    <span className="font-bold text-white block text-sm">{r.customerName || 'Direct Customer'}</span>
+                    <span className="text-[10px] text-slate-400">{r.customerEmail || 'customer@sourcedeliverypro.com'}</span>
                   </td>
-                  <td className="p-3 font-mono text-[#6B2737] font-bold">{r.trackingNumber}</td>
+                  <td className="p-3 font-mono text-[#6B2737] font-bold">{r.trackingNumber || 'N/A'}</td>
                   <td className="p-3">
-                    <span className="font-mono text-slate-300 block">{r.paymentRef}</span>
-                    <span className="text-[10px] text-slate-500">{r.paymentMethod}</span>
+                    <span className="font-mono text-slate-300 block">{r.paymentRef || 'N/A'}</span>
+                    <span className="text-[10px] text-slate-500">{r.paymentMethod || 'Manual Transfer'}</span>
                   </td>
-                  <td className="p-3 font-bold text-white">{formatCurrency(r.total)}</td>
+                  <td className="p-3 font-bold text-white">{formatCurrency(r.total || 0)}</td>
                   <td className="p-3">
                     <span
                       className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold border ${
-                        statusBadges[r.status] || 'bg-slate-800 text-slate-300 border-slate-700'
+                        (statusBadges && statusBadges[r.status]) || 'bg-slate-800 text-slate-300 border-slate-700'
                       }`}
                     >
-                      {r.status}
+                      {r.status || 'PAID'}
                     </span>
                   </td>
                   <td className="p-3 text-right space-x-1">
