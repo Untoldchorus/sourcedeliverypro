@@ -28,7 +28,8 @@ import {
   MANUAL_PAYMENT_METHODS,
   ManualPaymentMethod,
   getLocalShipments,
-  saveLocalShipment
+  saveLocalShipment,
+  getDeletedShipments
 } from '@/lib/payments/manualOptions'
 
 interface ShipmentItem {
@@ -50,30 +51,24 @@ interface ShipmentItem {
   payerEmail?: string
   paymentPayerEmail?: string
   paymentProof?: string
+  paymentStatus?: string
+  paid?: boolean
 }
 
 export default function PayPage() {
   const params = useParams()
   const router = useRouter()
-  const shipmentId = (params?.id as string) || 'SDP-882194'
+  const shipmentId = (params?.id as string) || ''
 
-  const [shipment, setShipment] = useState<ShipmentItem | null>({
-    id: shipmentId,
-    trackingNumber: shipmentId.toUpperCase().startsWith('SDP-') ? shipmentId.toUpperCase() : `SDP-${shipmentId.toUpperCase()}`,
-    status: 'PENDING_PAYMENT',
-    weight: 3.8,
-    amount: 145.00,
-    senderName: 'Apex Logistics Global',
-    recipientName: 'Valued Consignee',
-    origin: 'London, Heathrow (LHR)',
-    destination: 'New York, JFK (JFK)',
-    serviceType: 'Priority Air Express',
-  })
-  const [loading, setLoading] = useState(false)
+  const [shipment, setShipment] = useState<ShipmentItem | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [errorType, setErrorType] = useState<'DELETED' | 'INVALID' | null>(null)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+
   const [selectedMethodId, setSelectedMethodId] = useState<string>('crypto_btc')
   const [isSwitchingMethod, setIsSwitchingMethod] = useState(false)
   const [pendingMethodName, setPendingMethodName] = useState('')
-  const [payerName, setPayerName] = useState('Apex Logistics Global')
+  const [payerName, setPayerName] = useState('')
   const [payerEmail, setPayerEmail] = useState('')
   const [txId, setTxId] = useState('')
   const [copiedField, setCopiedField] = useState<string | null>(null)
@@ -87,21 +82,78 @@ export default function PayPage() {
   const [redirectTracking, setRedirectTracking] = useState('')
 
   useEffect(() => {
-    if (!shipmentId) return
-
     let isMounted = true
 
     async function loadShipment() {
-      const list = getLocalShipments()
-      let found: any = list.find((s: any) => s.id === shipmentId || s.trackingNumber === shipmentId)
+      const cleanId = (shipmentId || '').trim()
+      const cleanIdLower = cleanId.toLowerCase()
 
+      if (!cleanId) {
+        if (isMounted) {
+          setErrorType('INVALID')
+          setErrorMessage('No shipment tracking number or invoice ID was provided in the payment URL.')
+          setShipment(null)
+          setLoading(false)
+        }
+        return
+      }
+
+      // 1. Check if shipment has been deleted by Admin
+      const deletedList = getDeletedShipments().map((d) => (d || '').toLowerCase().trim())
+      if (deletedList.includes(cleanIdLower)) {
+        if (isMounted) {
+          setErrorType('DELETED')
+          setErrorMessage(`Shipment "${cleanId}" has been deleted from the operations registry. Payment cannot be processed for deleted consignments.`)
+          setShipment(null)
+          setLoading(false)
+        }
+        return
+      }
+
+      // 2. Query Local Shipments
+      const localList = getLocalShipments()
+      let found: any = localList.find((s: any) => {
+        const sId = (s.id || '').toLowerCase().trim()
+        const sTrk = (s.trackingNumber || '').toLowerCase().trim()
+        const sShp = (s.shipmentNumber || '').toLowerCase().trim()
+        const sAwb = (s.awb || '').toLowerCase().trim()
+        return sId === cleanIdLower || sTrk === cleanIdLower || sShp === cleanIdLower || sAwb === cleanIdLower
+      })
+
+      if (found) {
+        const fId = (found.id || '').toLowerCase().trim()
+        const fTrk = (found.trackingNumber || '').toLowerCase().trim()
+        if (deletedList.includes(fId) || deletedList.includes(fTrk)) {
+          if (isMounted) {
+            setErrorType('DELETED')
+            setErrorMessage(`Shipment "${found.trackingNumber || cleanId}" has been deleted from the operations registry.`)
+            setShipment(null)
+            setLoading(false)
+          }
+          return
+        }
+      }
+
+      // 3. Query Tracking API if not found locally
       if (!found) {
         try {
-          const res = await fetch(`/api/tracking/${encodeURIComponent(shipmentId)}`)
+          const res = await fetch(`/api/tracking/${encodeURIComponent(cleanId)}`)
           const json = await res.json()
           if (json.success && json.data) {
+            const dId = (json.data.id || '').toLowerCase().trim()
+            const dTrk = (json.data.trackingNumber || '').toLowerCase().trim()
+            if (deletedList.includes(dId) || deletedList.includes(dTrk)) {
+              if (isMounted) {
+                setErrorType('DELETED')
+                setErrorMessage(`Shipment "${json.data.trackingNumber || cleanId}" has been deleted from the operations registry.`)
+                setShipment(null)
+                setLoading(false)
+              }
+              return
+            }
+
             found = {
-              id: json.data.id || shipmentId,
+              id: json.data.id || cleanId,
               trackingNumber: json.data.trackingNumber,
               status: json.data.status,
               weight: json.data.weight,
@@ -109,79 +161,193 @@ export default function PayPage() {
               senderName: json.data.senderName,
               senderEmail: json.data.senderEmail,
               recipientName: json.data.recipientName,
+              recipientEmail: json.data.recipientEmail,
               origin: json.data.originCity,
               destination: json.data.destinationCity,
               serviceType: json.data.serviceType,
+              paymentStatus: json.data.paymentStatus,
+              paid: json.data.paid,
+              paymentProof: json.data.paymentProof,
+              paymentTxId: json.data.paymentTxId,
             }
           }
-        } catch {}
-      }
-
-      if (!found && shipmentId) {
-        found = {
-          id: shipmentId,
-          trackingNumber: shipmentId.toUpperCase().startsWith('SDP-') ? shipmentId.toUpperCase() : `SDP-${shipmentId.toUpperCase()}`,
-          status: 'PENDING_PAYMENT',
-          weight: 3.8,
-          amount: 145.00,
-          senderName: 'Apex Logistics Global',
-          senderEmail: 'client@example.com',
-          recipientName: 'Valued Consignee',
-          origin: 'London, Heathrow (LHR)',
-          destination: 'New York, JFK (JFK)',
-          serviceType: 'Priority Air Express',
+        } catch (err) {
+          console.warn('Tracking query error:', err)
         }
       }
 
-      if (isMounted) {
-        if (found) {
-          const targetTracking = (found.trackingNumber || found.id || shipmentId).trim().toUpperCase()
+      // 4. Query Shipments API if still not found
+      if (!found) {
+        try {
+          const res = await fetch('/api/shipments')
+          const json = await res.json()
+          if (json.success && Array.isArray(json.data)) {
+            const dbMatch = json.data.find((dbItem: any) => {
+              const dId = (dbItem.id || '').toLowerCase().trim()
+              const dTrk = (dbItem.trackingNumber || '').toLowerCase().trim()
+              const dShp = (dbItem.shipmentNumber || '').toLowerCase().trim()
+              const dInv = (dbItem.invoice?.invoiceNumber || dbItem.invoice?.id || '').toLowerCase().trim()
+              return dId === cleanIdLower || dTrk === cleanIdLower || dShp === cleanIdLower || dInv === cleanIdLower
+            })
 
-          // Check if payment has been confirmed/paid or submitted
-          const isTargetReset = targetTracking === 'SDPPBG2SZW92QU'
-          if (isTargetReset && !found.paymentProof && !found.paymentTxId && !found.receiptGenerated) {
-            found.status = 'PENDING_PAYMENT'
-            found.paymentStatus = 'PENDING'
-            found.paid = false
+            if (dbMatch) {
+              const dId = (dbMatch.id || '').toLowerCase().trim()
+              const dTrk = (dbMatch.trackingNumber || '').toLowerCase().trim()
+              if (deletedList.includes(dId) || deletedList.includes(dTrk)) {
+                if (isMounted) {
+                  setErrorType('DELETED')
+                  setErrorMessage(`Shipment "${dbMatch.trackingNumber || cleanId}" has been deleted from the operations registry.`)
+                  setShipment(null)
+                  setLoading(false)
+                }
+                return
+              }
+
+              found = {
+                id: dbMatch.id,
+                trackingNumber: dbMatch.trackingNumber || dbMatch.shipmentNumber,
+                status: dbMatch.status,
+                weight: dbMatch.weight || dbMatch.packageWeight,
+                amount: Number(dbMatch.totalAmount) || 145.5,
+                senderName: dbMatch.senderName,
+                senderEmail: dbMatch.senderEmail,
+                recipientName: dbMatch.recipientName,
+                recipientEmail: dbMatch.recipientEmail,
+                origin: dbMatch.senderCity || dbMatch.originCity,
+                destination: dbMatch.recipientCity || dbMatch.destinationCity,
+                serviceType: dbMatch.serviceType,
+                paymentStatus: dbMatch.payment?.status || dbMatch.paymentStatus,
+                paid: dbMatch.payment?.status === 'PAID' || dbMatch.paid,
+                paymentProof: dbMatch.payment?.proofOfPayment || dbMatch.paymentProof,
+                paymentTxId: dbMatch.payment?.paymentReference || dbMatch.paymentTxId,
+              }
+            }
           }
+        } catch (err) {
+          console.warn('Shipments API query error:', err)
+        }
+      }
 
-          // A shipment is actually confirmed/paid if it has proof, a transaction ID, an official receipt, or was approved
-          const hasProofOrTx = Boolean(found.paymentTxId || found.paymentProof)
-          const hasActualPayment = Boolean(
-            found.paid ||
-            found.receiptGenerated ||
-            found.status === 'LABEL_CREATED' ||
-            found.status === 'APPROVED' ||
-            (found.paymentStatus === 'PAID' && (hasProofOrTx || found.paid))
-          )
+      // 5. Check Default Seed Shipments if not deleted
+      if (!found) {
+        const seeds = [
+          {
+            id: 'SDP8F4K92LM381',
+            trackingNumber: 'SDP8F4K92LM381',
+            status: 'IN_TRANSIT',
+            weight: 5.5,
+            amount: 145.5,
+            senderName: 'John Doe',
+            senderEmail: 'john@example.com',
+            recipientName: 'Sarah Jenkins',
+            origin: 'New York',
+            destination: 'London',
+            serviceType: 'Over Night Express Service',
+          },
+          {
+            id: 'SDP993C104KL22',
+            trackingNumber: 'SDP993C104KL22',
+            status: 'CUSTOMS_CLEARANCE',
+            weight: 12.0,
+            amount: 320.0,
+            senderName: 'Global Supplier',
+            senderEmail: 'supplier@example.com',
+            recipientName: 'Acme Corp Warehouse',
+            origin: 'New York',
+            destination: 'Lagos',
+            serviceType: 'Usual Courier Service',
+          },
+          {
+            id: 'SDP77B219KP440',
+            trackingNumber: 'SDP77B219KP440',
+            status: 'DELIVERED',
+            weight: 2.5,
+            amount: 98.75,
+            senderName: 'Toronto Export Center',
+            senderEmail: 'toronto@example.com',
+            recipientName: 'Marcus Vance',
+            origin: 'Toronto',
+            destination: 'Frankfurt',
+            serviceType: 'Standard Courier Service',
+          },
+        ]
+        const seedMatch = seeds.find(
+          (s) => s.id.toLowerCase() === cleanIdLower || s.trackingNumber.toLowerCase() === cleanIdLower
+        )
+        if (seedMatch && !deletedList.includes(seedMatch.id.toLowerCase())) {
+          found = seedMatch
+        }
+      }
 
-          const isPending =
-            !hasActualPayment &&
-            (found.status === 'PENDING_PAYMENT' ||
-              found.status === 'DRAFT' ||
-              found.status === 'PAYMENT_FAILED' ||
-              found.paymentStatus === 'PENDING' ||
-              (!hasProofOrTx && found.paymentStatus !== 'APPROVED'))
-
-          if (!isPending && hasActualPayment) {
-            setIsRedirecting(true)
-            setRedirectTracking(targetTracking)
-            router.replace(`/tracking?number=${encodeURIComponent(targetTracking)}`)
-            return
-          }
-
-          setShipment(found as ShipmentItem)
-          if (found.senderName) setPayerName(found.senderName)
-          if (found.senderEmail) setPayerEmail(found.senderEmail)
-          if (found.status === 'PAYMENT_SUBMITTED' && hasProofOrTx) {
-            setIsRedirecting(true)
-            setRedirectTracking(targetTracking)
-            router.replace(`/tracking?number=${encodeURIComponent(targetTracking)}`)
-            return
-          }
-        } else {
+      // 6. IF STILL NOT FOUND: Do NOT fabricate fake demo! Report genuine error!
+      if (!found) {
+        if (isMounted) {
+          setErrorType('INVALID')
+          setErrorMessage(`This payment link is invalid or has expired. No active shipment or invoice was found matching reference "${cleanId}".`)
           setShipment(null)
+          setLoading(false)
         }
+        return
+      }
+
+      // 7. Found shipment processing
+      if (isMounted) {
+        // Sanitize numeric weight
+        if (found.weight !== undefined) {
+          const wClean = parseFloat(String(found.weight).replace(/[^0-9.]/g, ''))
+          if (!isNaN(wClean) && wClean > 0) found.weight = wClean
+        }
+
+        const targetTracking = (found.trackingNumber || found.id || cleanId).trim().toUpperCase()
+
+        // Check if target is reset shipment SDPPBG2SZW92QU
+        const isTargetReset = targetTracking === 'SDPPBG2SZW92QU'
+        if (isTargetReset && !found.paymentProof && !found.paymentTxId && !found.receiptGenerated) {
+          found.status = 'PENDING_PAYMENT'
+          found.paymentStatus = 'PENDING'
+          found.paid = false
+        }
+
+        const hasProofOrTx = Boolean(found.paymentTxId || found.paymentProof)
+        const hasActualPayment = Boolean(
+          found.paid ||
+          found.receiptGenerated ||
+          found.status === 'LABEL_CREATED' ||
+          found.status === 'APPROVED' ||
+          (found.paymentStatus === 'PAID' && (hasProofOrTx || found.paid))
+        )
+
+        const isPending =
+          !hasActualPayment &&
+          (found.status === 'PENDING_PAYMENT' ||
+            found.status === 'DRAFT' ||
+            found.status === 'PAYMENT_FAILED' ||
+            found.paymentStatus === 'PENDING' ||
+            (!hasProofOrTx && found.paymentStatus !== 'APPROVED'))
+
+        if (!isPending && hasActualPayment) {
+          setIsRedirecting(true)
+          setRedirectTracking(targetTracking)
+          router.replace(`/tracking?number=${encodeURIComponent(targetTracking)}`)
+          return
+        }
+
+        setShipment(found as ShipmentItem)
+        if (found.senderName) setPayerName(found.senderName)
+        else if (found.recipientName) setPayerName(found.recipientName)
+
+        if (found.senderEmail) setPayerEmail(found.senderEmail)
+        else if (found.recipientEmail) setPayerEmail(found.recipientEmail)
+
+        if (found.status === 'PAYMENT_SUBMITTED' && hasProofOrTx) {
+          setIsRedirecting(true)
+          setRedirectTracking(targetTracking)
+          router.replace(`/tracking?number=${encodeURIComponent(targetTracking)}`)
+          return
+        }
+
+        setErrorType(null)
+        setErrorMessage(null)
         setLoading(false)
       }
     }
@@ -347,17 +513,73 @@ export default function PayPage() {
     )
   }
 
-  if (!shipment) {
+  if (!shipment || errorType) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-950 p-4">
-        <div className="text-white text-center max-w-md bg-slate-900 border border-slate-800 p-8 rounded-3xl">
-          <h1 className="text-2xl font-bold mb-2">Shipment Not Found</h1>
-          <p className="text-slate-400 text-sm">
-            The shipment link provided is invalid or has expired.
-          </p>
-          <Button onClick={() => router.push('/')} className="mt-6 bg-[#6B2737] hover:bg-[#521b28] text-white">
-            Return to Homepage
-          </Button>
+        <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-lg w-full p-8 shadow-2xl text-center space-y-6">
+          <div
+            className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto border ${
+              errorType === 'DELETED'
+                ? 'bg-rose-500/20 text-rose-400 border-rose-500/30'
+                : 'bg-amber-500/20 text-amber-400 border-amber-500/30'
+            }`}
+          >
+            <AlertTriangle className="w-8 h-8" />
+          </div>
+
+          <div className="space-y-2">
+            <span
+              className={`text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full border inline-block ${
+                errorType === 'DELETED'
+                  ? 'bg-rose-500/10 text-rose-400 border-rose-500/30'
+                  : 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+              }`}
+            >
+              {errorType === 'DELETED' ? 'Consignment Deleted' : 'Invalid Payment Link'}
+            </span>
+            <h1 className="text-2xl font-black text-white">
+              {errorType === 'DELETED' ? 'Shipment Has Been Deleted' : 'Payment Link Not Valid'}
+            </h1>
+            <p className="text-xs text-slate-300 leading-relaxed max-w-sm mx-auto">
+              {errorMessage ||
+                'This payment link is invalid, has expired, or the corresponding consignment has been removed from our system.'}
+            </p>
+          </div>
+
+          <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 text-xs text-slate-400 space-y-2 text-left">
+            <div className="flex justify-between items-center">
+              <span className="text-slate-500">Requested Reference:</span>
+              <span className="font-mono text-white font-bold">{shipmentId || 'N/A'}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-slate-500">Error Status:</span>
+              <span className={`font-semibold ${errorType === 'DELETED' ? 'text-rose-400' : 'text-amber-400'}`}>
+                {errorType === 'DELETED' ? 'Record Deleted by Administrator' : '404 - Record Not Found'}
+              </span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-slate-500">Support Desk:</span>
+              <a href="mailto:support@sourcedeliverypro.com" className="text-sky-400 hover:underline font-mono">
+                support@sourcedeliverypro.com
+              </a>
+            </div>
+          </div>
+
+          <div className="space-y-2.5 pt-2">
+            <Button
+              onClick={() => router.push('/tracking')}
+              className="w-full bg-[#6B2737] hover:bg-[#521b28] text-white font-bold h-12 text-xs flex items-center justify-center gap-2 cursor-pointer shadow-md"
+            >
+              <Package className="w-4 h-4" /> Track a Valid Consignment
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => router.push('/')}
+              className="w-full border-slate-800 text-slate-300 hover:text-white hover:bg-slate-800 text-xs h-11 cursor-pointer"
+            >
+              Return to Homepage
+            </Button>
+          </div>
         </div>
       </div>
     )
