@@ -105,6 +105,9 @@ export default function AdminPaymentsPage() {
           origin: receiptData.origin,
           destination: receiptData.destination,
           serviceType: receiptData.serviceType,
+          status: receiptData.status || 'PAID',
+          items: receiptData.items || undefined,
+          notes: receiptData.notes || undefined,
         }),
       })
       const data = await res.json()
@@ -196,6 +199,9 @@ export default function AdminPaymentsPage() {
             origin: generatedReceipt.origin,
             destination: generatedReceipt.destination,
             serviceType: generatedReceipt.serviceType,
+            status: generatedReceipt.status || 'PAID',
+            items: generatedReceipt.items || undefined,
+            notes: generatedReceipt.notes || undefined,
           }),
         })
         const emailData = await emailRes.json()
@@ -1134,7 +1140,7 @@ export default function AdminPaymentsPage() {
                 </Button>
               </div>
               <p className="text-[11px] text-slate-500">
-                Payer receives an official branded receipt with payment verification badge and direct shipment tracking button.
+                Payer receives the official commercial receipt statement with itemized freight breakdown and digital ledger authentication.
               </p>
             </div>
 

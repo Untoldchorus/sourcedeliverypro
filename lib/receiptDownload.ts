@@ -499,3 +499,31 @@ export async function downloadReceiptAsPdf(receipt: AdminReceipt): Promise<void>
     console.error('Failed to download receipt as PDF:', err)
   }
 }
+
+/**
+ * Generates the receipt PDF as a Base64-encoded string (for email attachments).
+ */
+export async function generateReceiptPdfBase64(receipt: AdminReceipt): Promise<string | null> {
+  try {
+    const canvas = renderReceiptToCanvas(receipt)
+    const jpegBlob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob((blob) => resolve(blob), 'image/jpeg', 0.95)
+    })
+    if (!jpegBlob) return null
+
+    const arrayBuffer = await jpegBlob.arrayBuffer()
+    const jpegBytes = new Uint8Array(arrayBuffer)
+    const pdfBytes = buildPdfFromJpeg(jpegBytes, canvas.width, canvas.height)
+
+    let binary = ''
+    const chunkSize = 8192
+    for (let i = 0; i < pdfBytes.length; i += chunkSize) {
+      const chunk = pdfBytes.subarray(i, i + chunkSize)
+      binary += String.fromCharCode.apply(null, chunk as unknown as number[])
+    }
+    return btoa(binary)
+  } catch (err) {
+    console.error('Failed to generate receipt PDF base64:', err)
+    return null
+  }
+}

@@ -3,12 +3,13 @@
 import React, { useState, useEffect } from 'react'
 import {
   FileText, Plus, Search, Download, Printer, ShieldCheck, History,
-  X, CheckCircle2, Edit3, Trash2, Eye, AlertCircle, Save, Check, Image as ImageIcon
+  X, CheckCircle2, Edit3, Trash2, Eye, AlertCircle, Save, Check, Image as ImageIcon,
+  Mail, Send, Loader2
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { formatCurrency } from '@/lib/utils'
 import { getLocalReceipts, saveLocalReceipt, deleteLocalReceipt, getDeletedReceipts, addDeletedReceipt } from '@/lib/payments/manualOptions'
-import { downloadReceiptAsImage, downloadReceiptAsPdf } from '@/lib/receiptDownload'
+import { downloadReceiptAsImage, downloadReceiptAsPdf, generateReceiptPdfBase64 } from '@/lib/receiptDownload'
 
 export type ItemStatus = 'PAID' | 'NOT_PAID'
 
@@ -36,6 +37,8 @@ export interface AdminReceipt {
   createdDate: string
   notes?: string
   items?: ReceiptLineItem[]
+  receiptEmailed?: boolean
+  receiptEmailedTo?: string
 }
 
 export const AVAILABLE_DESCRIPTIONS = [
@@ -149,6 +152,15 @@ export default function AdminReceiptsPage() {
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
 
+  // Email Modal State
+  const [emailingReceipt, setEmailingReceipt] = useState<AdminReceipt | null>(null)
+  const [recipientEmail, setRecipientEmail] = useState('')
+  const [attachPdf, setAttachPdf] = useState(true)
+  const [sendingEmail, setSendingEmail] = useState(false)
+  const [emailSuccessMessage, setEmailSuccessMessage] = useState<string | null>(null)
+  const [emailErrorMessage, setEmailErrorMessage] = useState<string | null>(null)
+  const [autoEmailOnCreate, setAutoEmailOnCreate] = useState(true)
+  const [emailNotice, setEmailNotice] = useState<string | null>(null)
 
   // Create Form State
   const [newCustomerName, setNewCustomerName] = useState('')
@@ -178,8 +190,94 @@ export default function AdminReceiptsPage() {
     loadReceipts()
   }, [])
 
+  // Open Email Modal
+  const handleOpenEmailModal = (r: AdminReceipt) => {
+    setEmailingReceipt({ ...r, items: getReceiptItems(r) })
+    setRecipientEmail(r.customerEmail || '')
+    setAttachPdf(true)
+    setEmailSuccessMessage(null)
+    setEmailErrorMessage(null)
+  }
+
+  // Send Email Handler
+  const handleSendEmail = async (receiptToSend: AdminReceipt, targetEmail: string, includePdf: boolean) => {
+    const to = (targetEmail || receiptToSend.customerEmail || '').trim()
+    if (!to || !to.includes('@')) {
+      setEmailErrorMessage('Please enter a valid recipient email address.')
+      return false
+    }
+
+    setSendingEmail(true)
+    setEmailErrorMessage(null)
+    setEmailSuccessMessage(null)
+
+    try {
+      let pdfBase64: string | null = null
+      if (includePdf) {
+        try {
+          pdfBase64 = await generateReceiptPdfBase64(receiptToSend)
+        } catch (pdfErr) {
+          console.warn('PDF generation for email attachment skipped/failed:', pdfErr)
+        }
+      }
+
+      const items = getReceiptItems(receiptToSend)
+      const res = await fetch('/api/payments/receipt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to,
+          customerName: receiptToSend.customerName,
+          receiptNumber: receiptToSend.receiptNumber,
+          trackingNumber: receiptToSend.trackingNumber,
+          amount: receiptToSend.total,
+          subtotal: receiptToSend.subtotal,
+          tax: receiptToSend.tax,
+          paymentMethod: receiptToSend.paymentMethod,
+          paymentRef: receiptToSend.paymentRef,
+          createdDate: receiptToSend.createdDate,
+          status: receiptToSend.status,
+          items: items.filter((it) => it.enabled !== false),
+          notes: receiptToSend.notes,
+          pdfBase64: pdfBase64 || undefined,
+        }),
+      })
+
+      const data = await res.json()
+      if (data.success) {
+        const updated: AdminReceipt = {
+          ...receiptToSend,
+          receiptEmailed: true,
+          receiptEmailedTo: to,
+        }
+        saveLocalReceipt(updated)
+        setReceipts((prev) => prev.map((item) => (item.id === updated.id ? updated : item)))
+        if (viewingReceipt && viewingReceipt.id === updated.id) {
+          setViewingReceipt(updated)
+        }
+        setEmailSuccessMessage(`Receipt ${receiptToSend.receiptNumber} successfully delivered to ${to}`)
+        setEmailNotice(`Receipt ${receiptToSend.receiptNumber} successfully emailed to ${to}`)
+        setTimeout(() => setEmailNotice(null), 5000)
+        setTimeout(() => {
+          setEmailingReceipt(null)
+          setEmailSuccessMessage(null)
+        }, 2000)
+        return true
+      } else {
+        setEmailErrorMessage(data.error || 'Failed to dispatch receipt email.')
+        return false
+      }
+    } catch (err: any) {
+      console.error('Email send error:', err)
+      setEmailErrorMessage(err.message || 'Network error dispatching receipt email.')
+      return false
+    } finally {
+      setSendingEmail(false)
+    }
+  }
+
   // Create Receipt
-  const handleGenerateReceipt = (e: React.FormEvent) => {
+  const handleGenerateReceipt = async (e: React.FormEvent) => {
     e.preventDefault()
     const enabledItems = newCreateItems.filter((it) => it.enabled)
     const computedTotal = enabledItems.reduce((acc, it) => acc + (Number(it.amount) || 0), 0)
@@ -202,11 +300,19 @@ export default function AdminReceiptsPage() {
       createdDate: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
       notes: newNotes,
       items: newCreateItems,
+      receiptEmailed: false,
+      receiptEmailedTo: '',
     }
 
     saveLocalReceipt(newRcpt)
     setReceipts((prev) => [newRcpt, ...prev])
     setShowCreateModal(false)
+
+    // Automatically send receipt to email if option checked and email valid
+    if (autoEmailOnCreate && newCustomerEmail && newCustomerEmail.includes('@')) {
+      handleSendEmail(newRcpt, newCustomerEmail, true)
+    }
+
     setNewCustomerName('')
     setNewCustomerEmail('')
     setNewAWB('')
@@ -341,6 +447,19 @@ export default function AdminReceiptsPage() {
         </Button>
       </div>
 
+      {/* Global Email Notification Banner */}
+      {emailNotice && (
+        <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 p-3.5 rounded-2xl flex items-center justify-between gap-2 text-xs font-bold shadow-lg">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span>{emailNotice}</span>
+          </div>
+          <button onClick={() => setEmailNotice(null)} className="text-slate-400 hover:text-white p-1">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {/* Filter & Search Bar */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-lg">
         <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl text-xs font-bold border border-slate-800 flex-wrap">
@@ -399,7 +518,12 @@ export default function AdminReceiptsPage() {
                   </td>
                   <td className="p-3">
                     <span className="font-bold text-white block text-sm">{r.customerName || 'Direct Customer'}</span>
-                    <span className="text-[10px] text-slate-400">{r.customerEmail || 'customer@sourcedeliverypro.com'}</span>
+                    <span className="text-[10px] text-slate-400 block">{r.customerEmail || 'customer@sourcedeliverypro.com'}</span>
+                    {r.receiptEmailed && (
+                      <span className="inline-flex items-center gap-1 text-[10px] text-emerald-400 font-semibold mt-0.5">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-500" /> Emailed
+                      </span>
+                    )}
                   </td>
                   <td className="p-3 font-mono text-[#6B2737] font-bold">{r.trackingNumber || 'N/A'}</td>
                   <td className="p-3">
@@ -417,6 +541,17 @@ export default function AdminReceiptsPage() {
                     </span>
                   </td>
                   <td className="p-3 text-right space-x-1">
+                    {/* Send Receipt to Email */}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => handleOpenEmailModal(r)}
+                      className="text-xs text-sky-400 hover:text-sky-300 hover:bg-sky-500/10"
+                      title="Send Receipt directly to customer email"
+                    >
+                      <Mail className="w-3.5 h-3.5 mr-1" /> Email
+                    </Button>
+
                     {/* View Receipt */}
                     <Button
                       size="sm"
@@ -683,6 +818,13 @@ export default function AdminReceiptsPage() {
                   <ImageIcon className="w-3.5 h-3.5 mr-1 text-[#6B2737]" /> Download Image
                 </Button>
                 <Button
+                  onClick={() => handleOpenEmailModal(viewingReceipt)}
+                  className="bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs shadow-xs"
+                  title="Send official receipt directly to email"
+                >
+                  <Mail className="w-3.5 h-3.5 mr-1" /> {viewingReceipt.receiptEmailed ? 'Resend to Email' : 'Email Receipt'}
+                </Button>
+                <Button
                   onClick={() => downloadReceiptAsPdf(viewingReceipt)}
                   className="bg-[#6B2737] hover:bg-[#521b28] text-white font-bold text-xs shadow-xs"
                   title="Download commercial receipt slip as official PDF document"
@@ -691,6 +833,140 @@ export default function AdminReceiptsPage() {
                 </Button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal: Email Receipt ──────────────────────────────────────────────── */}
+      {emailingReceipt && (
+        <div className="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-lg w-full p-6 space-y-4 shadow-2xl relative">
+            <button
+              onClick={() => setEmailingReceipt(null)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-white"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-sky-500/20 text-sky-400">
+                  <Mail className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-black text-white">Send Commercial Receipt to Email</h2>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Deliver electronic receipt <span className="font-mono text-white font-bold">{emailingReceipt.receiptNumber}</span> directly to customer inbox.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Receipt Summary Card */}
+            <div className="grid grid-cols-2 gap-3 p-3 bg-slate-950/80 rounded-2xl border border-slate-800/80 text-xs">
+              <div>
+                <span className="text-[10px] text-slate-500 font-bold uppercase block">Customer / Shipper</span>
+                <span className="font-bold text-white truncate block">{emailingReceipt.customerName}</span>
+              </div>
+              <div className="text-right">
+                <span className="text-[10px] text-slate-500 font-bold uppercase block">Total Amount</span>
+                <span className="font-bold text-emerald-400 font-mono block">{formatCurrency(emailingReceipt.total)}</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-500 font-bold uppercase block">Tracking #</span>
+                <span className="font-mono text-[#6B2737] font-bold block">{emailingReceipt.trackingNumber}</span>
+              </div>
+              <div className="text-right">
+                <span className="text-[10px] text-slate-500 font-bold uppercase block">Status</span>
+                <span className="text-white font-semibold block">{emailingReceipt.status}</span>
+              </div>
+            </div>
+
+            {/* Notice: Pure Receipt Only */}
+            <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 text-[11px] text-slate-300 flex items-start gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+              <span>
+                <strong>Pure Receipt Delivery:</strong> The email body contains <em>only</em> the official commercial receipt statement—no promotional banners, marketing footers, or tracking buttons.
+              </span>
+            </div>
+
+            {emailSuccessMessage && (
+              <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 p-3 rounded-xl flex items-center gap-2 text-xs font-semibold">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>{emailSuccessMessage}</span>
+              </div>
+            )}
+
+            {emailErrorMessage && (
+              <div className="bg-red-500/10 border border-red-500/30 text-red-300 p-3 rounded-xl flex items-center gap-2 text-xs font-semibold">
+                <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+                <span>{emailErrorMessage}</span>
+              </div>
+            )}
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault()
+                handleSendEmail(emailingReceipt, recipientEmail, attachPdf)
+              }}
+              className="space-y-4 text-xs"
+            >
+              <div>
+                <label className="block text-slate-300 font-bold mb-1.5">
+                  Recipient Email Address <span className="text-red-400">*</span>
+                </label>
+                <input
+                  type="email"
+                  value={recipientEmail}
+                  onChange={(e) => setRecipientEmail(e.target.value)}
+                  placeholder="e.g. customer@example.com"
+                  required
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-white focus:ring-2 focus:ring-[#6B2737] focus:outline-none"
+                />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="attach-pdf-checkbox"
+                  checked={attachPdf}
+                  onChange={(e) => setAttachPdf(e.target.checked)}
+                  className="w-4 h-4 rounded text-[#6B2737] bg-slate-950 border-slate-700 focus:ring-[#6B2737]"
+                />
+                <label htmlFor="attach-pdf-checkbox" className="text-slate-300 cursor-pointer font-medium">
+                  Attach official PDF statement (<span className="font-mono text-slate-400">Receipt-{emailingReceipt.receiptNumber}.pdf</span>)
+                </label>
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2 border-t border-slate-800">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setEmailingReceipt(null)}
+                  disabled={sendingEmail}
+                  className="border-slate-800 text-slate-400 hover:bg-slate-800"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={sendingEmail || !recipientEmail}
+                  className="bg-[#6B2737] hover:bg-[#521b28] text-white font-bold flex items-center gap-1.5"
+                >
+                  {sendingEmail ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Sending Receipt...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-3.5 h-3.5" />
+                      <span>Send Receipt to Email</span>
+                    </>
+                  )}
+                </Button>
+              </div>
+            </form>
           </div>
         </div>
       )}
@@ -1122,6 +1398,20 @@ export default function AdminReceiptsPage() {
                   placeholder="Special instructions or customs declarations..."
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:ring-2 focus:ring-[#6B2737] focus:outline-none"
                 />
+              </div>
+
+              <div className="flex items-center gap-2 p-2.5 rounded-xl bg-slate-950 border border-slate-800">
+                <input
+                  type="checkbox"
+                  id="auto-email-toggle"
+                  checked={autoEmailOnCreate}
+                  onChange={(e) => setAutoEmailOnCreate(e.target.checked)}
+                  className="w-4 h-4 rounded text-[#6B2737] bg-slate-900 border-slate-700 focus:ring-[#6B2737]"
+                />
+                <label htmlFor="auto-email-toggle" className="text-slate-300 cursor-pointer text-xs font-medium flex items-center gap-1.5">
+                  <Mail className="w-3.5 h-3.5 text-sky-400" />
+                  <span>Send receipt to customer email immediately upon creation</span>
+                </label>
               </div>
 
               <div className="pt-3 flex justify-end gap-2 border-t border-slate-800">

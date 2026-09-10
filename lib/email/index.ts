@@ -354,7 +354,15 @@ export async function sendPaymentProofNotificationEmail(params: {
   })
 }
 
-export async function sendPaymentReceiptEmail(params: {
+export interface ReceiptEmailItem {
+  id?: string
+  description: string
+  amount: number
+  status?: string
+  enabled?: boolean
+}
+
+export interface ReceiptEmailParams {
   to: string
   customerName: string
   receiptNumber: string
@@ -368,90 +376,263 @@ export async function sendPaymentReceiptEmail(params: {
   origin?: string
   destination?: string
   serviceType?: string
-}): Promise<EmailResult> {
-  const appUrl = getAppUrl()
-  const subtotal = params.subtotal || Math.round((params.amount / 1.08) * 100) / 100
-  const tax = params.tax || Math.round((params.amount - subtotal) * 100) / 100
+  status?: string
+  items?: ReceiptEmailItem[]
+  notes?: string
+  attachments?: EmailAttachment[]
+}
 
-  const html = baseTemplate(`
-    <div style="background: #ECFDF5; border-left: 4px solid #10B981; padding: 18px; border-radius: 8px; margin-bottom: 24px;">
-      <h2 style="color: #065F46; margin: 0 0 6px; font-size: 20px; font-weight: 800;">Payment Confirmed & Verified! ✅</h2>
-      <p style="color: #047857; margin: 0; font-size: 14px;">Thank you for your payment, <strong>${params.customerName}</strong>. Your transaction has been verified and approved by our finance desk.</p>
-    </div>
+function escapeHtml(str: string | undefined | null): string {
+  if (!str) return ''
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
+}
 
-    <div style="background: #FAFAFA; border: 1px solid #E5E7EB; border-radius: 12px; padding: 24px; margin: 20px 0;">
-      <table style="width: 100%; border-bottom: 2px solid #E5E7EB; padding-bottom: 16px; margin-bottom: 16px;">
-        <tr>
-          <td>
-            <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #6B7280; font-weight: 700;">Official Receipt</div>
-            <div style="font-size: 20px; font-weight: 900; color: #1B2A4A; font-family: monospace;">${params.receiptNumber}</div>
+export function renderReceiptEmailHtml(params: ReceiptEmailParams): string {
+  const status = escapeHtml(params.status || 'PAID').toUpperCase()
+  const isPaid = status === 'PAID'
+  const isPartial = status === 'PARTIALLY_PAID'
+
+  const dateStr = escapeHtml(params.createdDate || new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }))
+  const totalAmount = Number(params.amount) || 0
+
+  // Filter enabled items or build fallback list
+  let itemsToRender: { description: string; amount: number; isItemPaid: boolean }[] = []
+  if (params.items && Array.isArray(params.items) && params.items.length > 0) {
+    itemsToRender = params.items
+      .filter((it) => it.enabled !== false)
+      .map((it) => ({
+        description: it.description,
+        amount: Number(it.amount) || 0,
+        isItemPaid: (it.status || 'PAID') === 'PAID',
+      }))
+  }
+
+  if (itemsToRender.length === 0) {
+    const sub = params.subtotal || Math.round((totalAmount / 1.08) * 100) / 100
+    const tx = params.tax || Math.round((totalAmount - sub) * 100) / 100
+    itemsToRender = [
+      {
+        description: 'Consignment Freight Charge & Handling',
+        amount: sub,
+        isItemPaid: isPaid,
+      },
+      {
+        description: 'Customs Clearance, Handling & Insurance Tax',
+        amount: tx,
+        isItemPaid: isPaid,
+      },
+    ]
+  }
+
+  const itemsRowsHtml = itemsToRender
+    .map(
+      (it) => `
+        <tr style="border-bottom: 1px solid #f1f5f9;">
+          <td style="padding: 11px 0; color: #334155; font-size: 13px; font-weight: 500;">
+            ${escapeHtml(it.description)}
           </td>
-          <td style="text-align: right;">
-            <span style="display: inline-block; background: #D1FAE5; color: #065F46; padding: 4px 12px; border-radius: 9999px; font-weight: 800; font-size: 12px; border: 1px solid #A7F3D0;">
-              PAID & VERIFIED
+          <td style="padding: 11px 0; text-align: right; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 13px; font-weight: 600; color: #1e293b;">
+            $${it.amount.toFixed(2)}
+          </td>
+          <td style="padding: 11px 0; text-align: center;">
+            <span style="display: inline-block; padding: 2px 9px; border-radius: 9999px; font-size: 10px; font-weight: 700; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; ${
+              it.isItemPaid
+                ? 'background-color: #d1fae5; color: #065f46; border: 1px solid #86efac;'
+                : 'background-color: #ffe4e6; color: #9f1239; border: 1px solid #fda4af;'
+            }">
+              ${it.isItemPaid ? 'PAID' : 'NOT PAID'}
             </span>
-            <div style="font-size: 12px; color: #6B7280; margin-top: 4px;">Date: ${params.createdDate || new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })}</div>
           </td>
         </tr>
-      </table>
+      `
+    )
+    .join('')
 
-      <div style="margin-bottom: 16px;">
-        <table style="width: 100%; font-size: 14px; border-collapse: collapse;">
-          <tbody>
-            <tr style="border-bottom: 1px solid #F3F4F6;">
-              <td style="padding: 9px 0; color: #6B7280;">Air Waybill / Tracking #:</td>
-              <td style="padding: 9px 0; text-align: right; font-weight: 800; color: #6B2737; font-family: monospace; font-size: 15px;">${params.trackingNumber}</td>
-            </tr>
-            <tr style="border-bottom: 1px solid #F3F4F6;">
-              <td style="padding: 9px 0; color: #6B7280;">Payment Method:</td>
-              <td style="padding: 9px 0; text-align: right; font-weight: 600; color: #1F2937;">${params.paymentMethod}</td>
-            </tr>
-            <tr style="border-bottom: 1px solid #F3F4F6;">
-              <td style="padding: 9px 0; color: #6B7280;">Transaction Reference:</td>
-              <td style="padding: 9px 0; text-align: right; font-family: monospace; font-weight: 600; color: #1F2937;">${params.paymentRef}</td>
-            </tr>
-            ${params.origin && params.destination ? `
-            <tr style="border-bottom: 1px solid #F3F4F6;">
-              <td style="padding: 9px 0; color: #6B7280;">Shipment Route:</td>
-              <td style="padding: 9px 0; text-align: right; font-weight: 600; color: #1F2937;">${params.origin} → ${params.destination}</td>
-            </tr>` : ''}
-            ${params.serviceType ? `
-            <tr style="border-bottom: 1px solid #F3F4F6;">
-              <td style="padding: 9px 0; color: #6B7280;">Service Class:</td>
-              <td style="padding: 9px 0; text-align: right; font-weight: 600; color: #1F2937;">${params.serviceType}</td>
-            </tr>` : ''}
-            <tr style="border-bottom: 1px solid #F3F4F6;">
-              <td style="padding: 9px 0; color: #6B7280;">Subtotal:</td>
-              <td style="padding: 9px 0; text-align: right; color: #374151;">$${subtotal.toFixed(2)}</td>
-            </tr>
-            <tr style="border-bottom: 1px solid #E5E7EB;">
-              <td style="padding: 9px 0; color: #6B7280;">Estimated Tax / Fees:</td>
-              <td style="padding: 9px 0; text-align: right; color: #374151;">$${tax.toFixed(2)}</td>
-            </tr>
-            <tr style="font-size: 16px;">
-              <td style="padding: 14px 0; font-weight: 800; color: #1B2A4A;">Total Amount Paid:</td>
-              <td style="padding: 14px 0; text-align: right; font-weight: 900; color: #059669; font-size: 19px;">$${Number(params.amount).toFixed(2)}</td>
-            </tr>
-          </tbody>
+  const statusBadgeStyle = isPaid
+    ? 'background-color: #d1fae5; color: #065f46; border: 1px solid #86efac;'
+    : isPartial
+    ? 'background-color: #fef3c7; color: #92400e; border: 1px solid #fcd34d;'
+    : 'background-color: #fee2e2; color: #991b1b; border: 1px solid #fca5a5;'
+
+  const html = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Official Receipt ${params.receiptNumber}</title>
+  <style>
+    body { margin: 0; padding: 24px 12px; background-color: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+  </style>
+</head>
+<body style="margin: 0; padding: 24px 12px; background-color: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased;">
+  <table width="100%" border="0" cellpadding="0" cellspacing="0" style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 20px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);">
+    <!-- Receipt Header -->
+    <tr>
+      <td style="padding: 24px 28px; border-bottom: 1px solid #e2e8f0;">
+        <table width="100%" border="0" cellpadding="0" cellspacing="0">
+          <tr>
+            <td style="vertical-align: top;">
+              <table border="0" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="vertical-align: middle; padding-right: 10px;">
+                    <div style="width: 34px; height: 34px; background-color: #1B2A4A; border-radius: 10px; text-align: center; line-height: 34px; color: #ffffff; font-weight: 900; font-size: 15px; display: inline-block;">
+                      SD
+                    </div>
+                  </td>
+                  <td style="vertical-align: middle;">
+                    <div style="font-size: 20px; font-weight: 900; color: #1B2A4A; letter-spacing: -0.5px; line-height: 1.1;">
+                      SourceDelivery<span style="color: #6B2737;">Pro</span>
+                    </div>
+                  </td>
+                </tr>
+              </table>
+              <div style="font-size: 11px; color: #64748B; margin-top: 6px; font-weight: 500;">
+                Commercial Freight Billing &amp; Electronic Clearing Statement
+              </div>
+            </td>
+            <td style="vertical-align: top; text-align: right;">
+              <div style="font-size: 10px; font-weight: 700; color: #94A3B8; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 2px;">
+                OFFICIAL RECEIPT
+              </div>
+              <div style="font-size: 16px; font-weight: 900; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; color: #1B2A4A;">
+                ${params.receiptNumber}
+              </div>
+              <div style="margin-top: 6px;">
+                <span style="display: inline-block; padding: 3px 10px; border-radius: 9999px; font-size: 10px; font-weight: 800; letter-spacing: 0.5px; ${statusBadgeStyle}">
+                  ${status}
+                </span>
+              </div>
+            </td>
+          </tr>
         </table>
-      </div>
-    </div>
+      </td>
+    </tr>
 
-    <div style="text-align: center; margin: 28px 0;">
-      <a href="${appUrl}/tracking?number=${encodeURIComponent(params.trackingNumber)}" class="btn">
-        Track Shipment Live
-      </a>
-    </div>
+    <!-- Billing Info & Consignment Telemetry Grid -->
+    <tr>
+      <td style="padding: 20px 28px; background-color: #f8fafc; border-bottom: 1px solid #e2e8f0;">
+        <table width="100%" border="0" cellpadding="0" cellspacing="0">
+          <tr>
+            <td width="50%" style="vertical-align: top; padding-right: 14px;">
+              <div style="font-size: 10px; font-weight: 700; color: #94A3B8; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">
+                Billed To (Customer)
+              </div>
+              <div style="font-size: 14px; font-weight: 800; color: #1B2A4A; margin-bottom: 2px;">
+                ${params.customerName || 'Direct Shipper'}
+              </div>
+              <div style="font-size: 12px; color: #475569; margin-bottom: 3px;">
+                ${params.to}
+              </div>
+              <div style="font-size: 11px; color: #94A3B8;">
+                Verified Logistics Customer
+              </div>
+            </td>
+            <td width="50%" style="vertical-align: top; padding-left: 14px; border-left: 1px solid #e2e8f0;">
+              <div style="font-size: 10px; font-weight: 700; color: #94A3B8; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">
+                Consignment Telemetry
+              </div>
+              <div style="font-size: 12px; color: #475569; margin-bottom: 3px;">
+                Tracking Number: <strong style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; color: #6B2737; font-size: 13px;">${params.trackingNumber}</strong>
+              </div>
+              <div style="font-size: 12px; color: #475569; margin-bottom: 3px;">
+                Payment Method: <strong style="color: #1e293b;">${params.paymentMethod}</strong>
+              </div>
+              <div style="font-size: 12px; color: #475569; margin-bottom: 3px;">
+                Tx Ref: <strong style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; color: #1e293b;">${params.paymentRef}</strong>
+              </div>
+              <div style="font-size: 11px; color: #94A3B8; margin-top: 4px;">
+                Date Issued: ${dateStr}
+              </div>
+              ${params.origin && params.destination ? `
+              <div style="font-size: 11px; color: #64748B; margin-top: 3px;">
+                Route: ${params.origin} &rarr; ${params.destination}
+              </div>` : ''}
+              ${params.serviceType ? `
+              <div style="font-size: 11px; color: #64748B; margin-top: 2px;">
+                Class: ${params.serviceType}
+              </div>` : ''}
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
 
-    <p class="p" style="font-size: 13px; color: #6B7280; text-align: center;">
-      Official dispatch documents, security clearance, and delivery updates are now active for this consignment.<br/>
-      If you have questions regarding this receipt, please contact finance operations at <a href="mailto:support@sourcedeliverypro.com" style="color: #6B2737; font-weight: bold;">support@sourcedeliverypro.com</a> or call <a href="tel:+16183681268" style="color: #6B2737; font-weight: bold;">(618) 368 1268</a>.
-    </p>
-  `)
+    <!-- Line Items Table -->
+    <tr>
+      <td style="padding: 24px 28px 16px;">
+        <table width="100%" border="0" cellpadding="0" cellspacing="0">
+          <thead>
+            <tr style="border-bottom: 1px solid #e2e8f0;">
+              <th align="left" style="padding-bottom: 10px; font-size: 10px; font-weight: 700; color: #64748B; text-transform: uppercase; letter-spacing: 0.5px;">
+                Description &amp; Freight Breakdown
+              </th>
+              <th align="right" width="110" style="padding-bottom: 10px; font-size: 10px; font-weight: 700; color: #64748B; text-transform: uppercase; letter-spacing: 0.5px;">
+                Amount (USD)
+              </th>
+              <th align="center" width="90" style="padding-bottom: 10px; font-size: 10px; font-weight: 700; color: #64748B; text-transform: uppercase; letter-spacing: 0.5px;">
+                Status
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            ${itemsRowsHtml}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td style="padding-top: 16px; border-top: 2px solid #cbd5e1; font-size: 14px; font-weight: 900; color: #1B2A4A;">
+                Total Amount Paid
+              </td>
+              <td align="right" style="padding-top: 16px; border-top: 2px solid #cbd5e1; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 17px; font-weight: 900; color: #059669;">
+                $${totalAmount.toFixed(2)}
+              </td>
+              <td align="center" style="padding-top: 16px; border-top: 2px solid #cbd5e1;">
+                <span style="display: inline-block; padding: 3px 10px; border-radius: 9999px; font-size: 10px; font-weight: 800; letter-spacing: 0.5px; ${statusBadgeStyle}">
+                  ${status}
+                </span>
+              </td>
+            </tr>
+          </tfoot>
+        </table>
 
+        ${params.notes && params.notes.trim() ? `
+        <div style="margin-top: 20px; padding: 12px 16px; background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; font-size: 12px; color: #475569;">
+          <strong style="display: block; color: #334155; margin-bottom: 3px; font-weight: 700;">Special Operational Notes:</strong>
+          ${params.notes.trim()}
+        </div>` : ''}
+      </td>
+    </tr>
+
+    <!-- Digitally Authenticated Footer -->
+    <tr>
+      <td style="padding: 16px 28px 20px; border-top: 1px solid #e2e8f0;">
+        <table width="100%" border="0" cellpadding="0" cellspacing="0">
+          <tr>
+            <td style="font-size: 11px; font-weight: 700; color: #047857;">
+              &#10003; Digitally Authenticated &amp; Recorded in SourceDeliveryPro Ledger
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`
+
+  return html
+}
+
+export async function sendPaymentReceiptEmail(params: ReceiptEmailParams): Promise<EmailResult> {
+  const html = renderReceiptEmailHtml(params)
   return sendEmail({
     to: params.to,
-    subject: `Official Payment Receipt — ${params.receiptNumber} (${params.trackingNumber})`,
+    subject: `Official Receipt — ${params.receiptNumber} (${params.trackingNumber})`,
     html,
+    attachments: params.attachments && params.attachments.length > 0 ? params.attachments : undefined,
   })
 }
