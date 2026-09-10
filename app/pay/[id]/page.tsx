@@ -102,8 +102,8 @@ export default function PayPage() {
       const deletedList = getDeletedShipments().map((d) => (d || '').toLowerCase().trim())
       if (deletedList.includes(cleanIdLower)) {
         if (isMounted) {
-          setErrorType('DELETED')
-          setErrorMessage(`Shipment "${cleanId}" has been deleted from the operations registry. Payment cannot be processed for deleted consignments.`)
+          setErrorType('INVALID')
+          setErrorMessage(`This payment link is invalid, expired, or does not exist. No active shipment was found matching reference "${cleanId}".`)
           setShipment(null)
           setLoading(false)
         }
@@ -125,8 +125,8 @@ export default function PayPage() {
         const fTrk = (found.trackingNumber || '').toLowerCase().trim()
         if (deletedList.includes(fId) || deletedList.includes(fTrk)) {
           if (isMounted) {
-            setErrorType('DELETED')
-            setErrorMessage(`Shipment "${found.trackingNumber || cleanId}" has been deleted from the operations registry.`)
+            setErrorType('INVALID')
+            setErrorMessage(`This payment link is invalid, expired, or does not exist. No active shipment was found matching reference "${cleanId}".`)
             setShipment(null)
             setLoading(false)
           }
@@ -144,8 +144,8 @@ export default function PayPage() {
             const dTrk = (json.data.trackingNumber || '').toLowerCase().trim()
             if (deletedList.includes(dId) || deletedList.includes(dTrk)) {
               if (isMounted) {
-                setErrorType('DELETED')
-                setErrorMessage(`Shipment "${json.data.trackingNumber || cleanId}" has been deleted from the operations registry.`)
+                setErrorType('INVALID')
+                setErrorMessage(`This payment link is invalid, expired, or does not exist. No active shipment was found matching reference "${cleanId}".`)
                 setShipment(null)
                 setLoading(false)
               }
@@ -195,8 +195,8 @@ export default function PayPage() {
               const dTrk = (dbMatch.trackingNumber || '').toLowerCase().trim()
               if (deletedList.includes(dId) || deletedList.includes(dTrk)) {
                 if (isMounted) {
-                  setErrorType('DELETED')
-                  setErrorMessage(`Shipment "${dbMatch.trackingNumber || cleanId}" has been deleted from the operations registry.`)
+                  setErrorType('INVALID')
+                  setErrorMessage(`This payment link is invalid, expired, or does not exist. No active shipment was found matching reference "${cleanId}".`)
                   setShipment(null)
                   setLoading(false)
                 }
@@ -517,32 +517,20 @@ export default function PayPage() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-950 p-4">
         <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-lg w-full p-8 shadow-2xl text-center space-y-6">
-          <div
-            className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto border ${
-              errorType === 'DELETED'
-                ? 'bg-rose-500/20 text-rose-400 border-rose-500/30'
-                : 'bg-amber-500/20 text-amber-400 border-amber-500/30'
-            }`}
-          >
+          <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto border bg-amber-500/20 text-amber-400 border-amber-500/30">
             <AlertTriangle className="w-8 h-8" />
           </div>
 
           <div className="space-y-2">
-            <span
-              className={`text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full border inline-block ${
-                errorType === 'DELETED'
-                  ? 'bg-rose-500/10 text-rose-400 border-rose-500/30'
-                  : 'bg-amber-500/10 text-amber-400 border-amber-500/30'
-              }`}
-            >
-              {errorType === 'DELETED' ? 'Consignment Deleted' : 'Invalid Payment Link'}
+            <span className="text-[10px] font-bold uppercase tracking-widest px-3 py-1 rounded-full border inline-block bg-amber-500/10 text-amber-400 border-amber-500/30">
+              Invalid Payment Link
             </span>
             <h1 className="text-2xl font-black text-white">
-              {errorType === 'DELETED' ? 'Shipment Has Been Deleted' : 'Payment Link Not Valid'}
+              Payment Link Not Valid
             </h1>
             <p className="text-xs text-slate-300 leading-relaxed max-w-sm mx-auto">
               {errorMessage ||
-                'This payment link is invalid, has expired, or the corresponding consignment has been removed from our system.'}
+                'This payment link is invalid, expired, or the corresponding consignment does not exist.'}
             </p>
           </div>
 
@@ -553,8 +541,8 @@ export default function PayPage() {
             </div>
             <div className="flex justify-between items-center">
               <span className="text-slate-500">Error Status:</span>
-              <span className={`font-semibold ${errorType === 'DELETED' ? 'text-rose-400' : 'text-amber-400'}`}>
-                {errorType === 'DELETED' ? 'Record Deleted by Administrator' : '404 - Record Not Found'}
+              <span className="font-semibold text-amber-400">
+                404 - Invalid Link
               </span>
             </div>
             <div className="flex justify-between items-center">
