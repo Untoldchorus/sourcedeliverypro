@@ -148,9 +148,9 @@ export default function AdminReceiptsPage() {
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
 
-  // Inline amount edit for viewing receipt
-  const [editingAmountItemId, setEditingAmountItemId] = useState<string | null>(null)
-  const [inlineAmountValue, setInlineAmountValue] = useState<string>('')
+  // Direct amount drafts and billing edit state for viewing receipt
+  const [amountDrafts, setAmountDrafts] = useState<Record<string, string>>({})
+  const [isEditingBillingInfo, setIsEditingBillingInfo] = useState(false)
 
   // Create Form State
   const [newCustomerName, setNewCustomerName] = useState('')
@@ -226,12 +226,27 @@ export default function AdminReceiptsPage() {
   const handleToggleViewingItem = (desc: string) => {
     if (!viewingReceipt) return
     const currentItems = getReceiptItems(viewingReceipt)
-    const newItems = currentItems.map((it) => {
-      if (it.description === desc) {
-        return { ...it, enabled: !it.enabled }
-      }
-      return it
-    })
+    const exists = currentItems.some((it) => it.description === desc)
+    let newItems: ReceiptLineItem[]
+    if (exists) {
+      newItems = currentItems.map((it) => {
+        if (it.description === desc) {
+          return { ...it, enabled: !it.enabled }
+        }
+        return it
+      })
+    } else {
+      newItems = [
+        ...currentItems,
+        {
+          id: 'desc-' + desc.toLowerCase().replace(/[^a-z0-9]/g, '-'),
+          description: desc,
+          amount: DEFAULT_DESCRIPTION_AMOUNTS[desc] || 50.00,
+          status: 'PAID',
+          enabled: true,
+        },
+      ]
+    }
 
     const enabled = newItems.filter((it) => it.enabled)
     const newTotal = enabled.reduce((acc, it) => acc + (Number(it.amount) || 0), 0)
@@ -284,7 +299,7 @@ export default function AdminReceiptsPage() {
     if (!viewingReceipt) return
     const currentItems = getReceiptItems(viewingReceipt)
     const newItems = currentItems.map((it) => {
-      if (it.id === itemId) {
+      if (it.id === itemId || it.description === itemId) {
         return { ...it, description: newDesc }
       }
       return it
@@ -300,14 +315,13 @@ export default function AdminReceiptsPage() {
     saveLocalReceipt(updated)
   }
 
-  // Save inline edited amount in viewing modal
-  const handleSaveInlineAmount = (itemId: string) => {
+  // Directly update line item amount from live input
+  const handleDirectUpdateAmount = (itemId: string, newAmount: number) => {
     if (!viewingReceipt) return
-    const num = Math.max(0, parseFloat(inlineAmountValue) || 0)
     const currentItems = getReceiptItems(viewingReceipt)
     const newItems = currentItems.map((it) => {
-      if (it.id === itemId) {
-        return { ...it, amount: num }
+      if (it.id === itemId || it.description === itemId) {
+        return { ...it, amount: Math.max(0, newAmount) }
       }
       return it
     })
@@ -326,7 +340,18 @@ export default function AdminReceiptsPage() {
     setViewingReceipt(updated)
     setReceipts((prev) => prev.map((r) => (r.id === updated.id ? updated : r)))
     saveLocalReceipt(updated)
-    setEditingAmountItemId(null)
+  }
+
+  // Update top-level field on viewing receipt (customerName, trackingNumber, notes, etc.)
+  const handleUpdateViewingField = (field: keyof AdminReceipt, value: any) => {
+    if (!viewingReceipt) return
+    const updated: AdminReceipt = {
+      ...viewingReceipt,
+      [field]: value,
+    }
+    setViewingReceipt(updated)
+    setReceipts((prev) => prev.map((r) => (r.id === updated.id ? updated : r)))
+    saveLocalReceipt(updated)
   }
 
   // Save Edit Receipt
@@ -622,34 +647,99 @@ export default function AdminReceiptsPage() {
                 </div>
               </div>
 
-              {/* Billing Information Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 text-xs bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                <div>
-                  <span className="font-bold text-slate-400 uppercase text-[10px] block mb-1">Billed To (Customer)</span>
-                  <p className="font-bold text-[#1B2A4A] text-sm">{viewingReceipt.customerName}</p>
-                  <p className="text-slate-600">{viewingReceipt.customerEmail}</p>
-                  <p className="text-slate-500 mt-0.5">Verified Logistics Customer</p>
+              {/* Billing Information Grid with Edit Toggle */}
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 text-xs">
+                <div className="flex items-center justify-between mb-3 pb-2 border-b border-slate-200">
+                  <span className="font-bold text-slate-500 uppercase text-[10px] tracking-wider">
+                    Consignment &amp; Billing Telemetry
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingBillingInfo(!isEditingBillingInfo)}
+                    className="print:hidden text-[11px] font-bold text-[#6B2737] hover:text-[#521b28] flex items-center gap-1 hover:underline cursor-pointer"
+                  >
+                    <Edit3 className="w-3 h-3" />
+                    {isEditingBillingInfo ? 'Done Editing Info' : 'Edit Customer / AWB'}
+                  </button>
                 </div>
 
-                <div>
-                  <span className="font-bold text-slate-400 uppercase text-[10px] block mb-1">Consignment Telemetry</span>
-                  <p className="text-slate-600">
-                    Associated AWB: <strong className="font-mono text-[#6B2737]">{viewingReceipt.trackingNumber}</strong>
-                  </p>
-                  <p className="text-slate-600 mt-0.5">
-                    Payment Method: <strong className="text-slate-800">{viewingReceipt.paymentMethod}</strong>
-                  </p>
-                  <p className="text-slate-600 mt-0.5 font-mono">
-                    Tx Ref: <strong className="text-slate-800">{viewingReceipt.paymentRef}</strong>
-                  </p>
-                  <p className="text-slate-500 mt-0.5">Date Issued: {viewingReceipt.createdDate}</p>
+                {isEditingBillingInfo ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3 print:hidden">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">
+                        Billed To (Customer Name)
+                      </label>
+                      <input
+                        type="text"
+                        value={viewingReceipt.customerName}
+                        onChange={(e) => handleUpdateViewingField('customerName', e.target.value)}
+                        className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-[#1B2A4A] font-semibold focus:outline-none focus:ring-1 focus:ring-[#6B2737]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">
+                        Customer Email
+                      </label>
+                      <input
+                        type="email"
+                        value={viewingReceipt.customerEmail}
+                        onChange={(e) => handleUpdateViewingField('customerEmail', e.target.value)}
+                        className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#6B2737]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">
+                        Associated AWB
+                      </label>
+                      <input
+                        type="text"
+                        value={viewingReceipt.trackingNumber}
+                        onChange={(e) => handleUpdateViewingField('trackingNumber', e.target.value)}
+                        className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-mono font-bold text-[#6B2737] focus:outline-none focus:ring-1 focus:ring-[#6B2737]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">
+                        Payment Method
+                      </label>
+                      <input
+                        type="text"
+                        value={viewingReceipt.paymentMethod}
+                        onChange={(e) => handleUpdateViewingField('paymentMethod', e.target.value)}
+                        className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 font-semibold focus:outline-none focus:ring-1 focus:ring-[#6B2737]"
+                      />
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className={`grid grid-cols-1 sm:grid-cols-2 gap-6 ${isEditingBillingInfo ? 'hidden print:grid' : ''}`}>
+                  <div>
+                    <span className="font-bold text-slate-400 uppercase text-[10px] block mb-1">Billed To (Customer)</span>
+                    <p className="font-bold text-[#1B2A4A] text-sm">{viewingReceipt.customerName}</p>
+                    <p className="text-slate-600">{viewingReceipt.customerEmail}</p>
+                    <p className="text-slate-500 mt-0.5">Verified Logistics Customer</p>
+                  </div>
+
+                  <div>
+                    <span className="font-bold text-slate-400 uppercase text-[10px] block mb-1">Consignment Telemetry</span>
+                    <p className="text-slate-600">
+                      Associated AWB: <strong className="font-mono text-[#6B2737]">{viewingReceipt.trackingNumber}</strong>
+                    </p>
+                    <p className="text-slate-600 mt-0.5">
+                      Payment Method: <strong className="text-slate-800">{viewingReceipt.paymentMethod}</strong>
+                    </p>
+                    <p className="text-slate-600 mt-0.5 font-mono">
+                      Tx Ref: <strong className="text-slate-800">{viewingReceipt.paymentRef}</strong>
+                    </p>
+                    <p className="text-slate-500 mt-0.5">Date Issued: {viewingReceipt.createdDate}</p>
+                  </div>
                 </div>
               </div>
 
               {/* Description & Freight Breakdown Section */}
               <div className="space-y-3 text-xs">
                 {/* Description Toggle Controls (Admin Toolbar under Description Column, hidden when printing) */}
-                <div className="print:hidden bg-slate-50 p-3 rounded-2xl border border-slate-200 space-y-2">
+                <div className="print:hidden bg-slate-50 p-3.5 rounded-2xl border border-slate-200 space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
                       Toggle Descriptions in Freight Breakdown
@@ -694,82 +784,92 @@ export default function AdminReceiptsPage() {
                 </div>
 
                 {/* Table with 3 columns: DESCRIPTION & FREIGHT BREAKDOWN | AMOUNT (USD) | STATUS */}
-                <div className="border border-slate-200 rounded-xl overflow-hidden shadow-xs">
+                <div className="border border-slate-200 rounded-xl overflow-hidden shadow-xs bg-white">
                   <table className="w-full text-xs">
                     <thead>
-                      <tr className="bg-slate-50/80 border-b border-slate-200 font-bold text-slate-500 uppercase text-[10px]">
+                      <tr className="bg-slate-50 border-b border-slate-200 font-bold text-slate-600 uppercase text-[10px]">
                         <th className="text-left px-3.5 py-2.5">Description &amp; Freight Breakdown</th>
-                        <th className="text-right px-3.5 py-2.5 w-32">Amount (USD)</th>
-                        <th className="text-center px-3.5 py-2.5 w-28">Status</th>
+                        <th className="text-right px-3.5 py-2.5 w-36">Amount (USD)</th>
+                        <th className="text-center px-3.5 py-2.5 w-32">Status</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {enabledViewingItems.map((item) => (
-                        <tr key={item.id} className="hover:bg-slate-50/60 transition-colors">
+                        <tr key={item.id} className="hover:bg-slate-50/50 transition-colors">
+                          {/* Column 1: Description */}
                           <td className="px-3.5 py-2.5 text-slate-700">
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="font-medium">{item.description}</span>
-                              {/* Admin switcher dropdown between descriptions (hidden on print) */}
+                            {/* Interactive view mode */}
+                            <div className="print:hidden flex items-center gap-2">
                               <select
                                 value={item.description}
                                 onChange={(e) => handleChangeItemDescription(item.id, e.target.value)}
-                                className="print:hidden text-[10px] bg-white border border-slate-200 rounded px-1.5 py-0.5 text-slate-500 hover:border-slate-400 focus:outline-none focus:ring-1 focus:ring-[#6B2737]"
+                                className="w-full bg-white hover:bg-slate-50 focus:bg-white border border-slate-200 hover:border-slate-300 focus:border-[#6B2737] text-slate-800 font-semibold text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#6B2737] transition-colors cursor-pointer"
                                 title="Switch description"
                               >
                                 {AVAILABLE_DESCRIPTIONS.map((d) => (
-                                  <option key={d} value={d}>{d}</option>
+                                  <option key={d} value={d}>
+                                    {d}
+                                  </option>
                                 ))}
                               </select>
+                              <button
+                                type="button"
+                                onClick={() => handleToggleViewingItem(item.description)}
+                                className="text-slate-400 hover:text-red-600 p-1.5 rounded-lg hover:bg-red-50 transition-colors shrink-0"
+                                title="Remove / Disable this item"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
                             </div>
+                            {/* Print mode */}
+                            <span className="hidden print:inline-block font-semibold text-slate-800">
+                              {item.description}
+                            </span>
                           </td>
+
+                          {/* Column 2: Amount (USD) - DIRECT LIVE NUMERIC INPUT */}
                           <td className="px-3.5 py-2.5 text-right font-mono font-medium text-slate-800">
-                            {editingAmountItemId === item.id ? (
-                              <div className="flex items-center justify-end gap-1 print:hidden">
-                                <span className="text-slate-400 font-mono text-xs">$</span>
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  autoFocus
-                                  value={inlineAmountValue}
-                                  onChange={(e) => setInlineAmountValue(e.target.value)}
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter') handleSaveInlineAmount(item.id)
-                                    if (e.key === 'Escape') setEditingAmountItemId(null)
-                                  }}
-                                  className="w-20 px-1.5 py-0.5 text-right border border-[#6B2737] rounded font-mono text-xs focus:outline-none"
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() => handleSaveInlineAmount(item.id)}
-                                  className="p-1 rounded bg-emerald-600 text-white hover:bg-emerald-700"
-                                  title="Save"
-                                >
-                                  <Check className="w-3 h-3" />
-                                </button>
-                              </div>
-                            ) : (
-                              <div className="flex items-center justify-end gap-1 group">
-                                <span>{formatCurrency(item.amount)}</span>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setEditingAmountItemId(item.id)
-                                    setInlineAmountValue(String(item.amount))
-                                  }}
-                                  className="print:hidden opacity-0 group-hover:opacity-100 transition-opacity text-slate-400 hover:text-slate-700 p-0.5 rounded hover:bg-slate-100"
-                                  title="Click to edit amount"
-                                >
-                                  <Edit3 className="w-3 h-3" />
-                                </button>
-                              </div>
-                            )}
+                            <div className="print:hidden flex items-center justify-end gap-1">
+                              <span className="text-slate-400 font-mono text-xs font-semibold">$</span>
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                value={amountDrafts[item.id] !== undefined ? amountDrafts[item.id] : item.amount}
+                                onChange={(e) => {
+                                  const val = e.target.value
+                                  setAmountDrafts((prev) => ({ ...prev, [item.id]: val }))
+                                  const num = parseFloat(val)
+                                  if (!isNaN(num)) {
+                                    handleDirectUpdateAmount(item.id, num)
+                                  }
+                                }}
+                                onBlur={(e) => {
+                                  const num = parseFloat(e.target.value)
+                                  if (!isNaN(num)) {
+                                    handleDirectUpdateAmount(item.id, num)
+                                  }
+                                  setAmountDrafts((prev) => {
+                                    const next = { ...prev }
+                                    delete next[item.id]
+                                    return next
+                                  })
+                                }}
+                                className="w-28 px-2 py-1 text-right font-mono font-bold text-xs bg-white hover:bg-slate-50 focus:bg-white border border-slate-300 hover:border-slate-400 focus:border-[#6B2737] rounded-md transition-colors focus:outline-none focus:ring-1 focus:ring-[#6B2737] text-[#1B2A4A]"
+                                title="Click to edit amount directly"
+                              />
+                            </div>
+                            <span className="hidden print:inline-block font-mono font-bold text-slate-900">
+                              {formatCurrency(item.amount)}
+                            </span>
                           </td>
+
+                          {/* Column 3: Status - DIRECT LIVE TOGGLE */}
                           <td className="px-3.5 py-2.5 text-center">
-                            {/* Admin toggle: Click to toggle Paid / Not Paid */}
                             <button
                               type="button"
                               onClick={() => handleToggleItemStatus(item.id)}
-                              className={`print:hidden inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black tracking-wide cursor-pointer transition-all border shadow-xs ${
+                              className={`print:hidden inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold cursor-pointer transition-all border shadow-xs ${
                                 item.status === 'PAID'
                                   ? 'bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100'
                                   : 'bg-rose-50 text-rose-700 border-rose-300 hover:bg-rose-100'
@@ -777,13 +877,12 @@ export default function AdminReceiptsPage() {
                               title="Click to toggle Paid / Not Paid"
                             >
                               <span
-                                className={`w-1.5 h-1.5 rounded-full ${
+                                className={`w-2 h-2 rounded-full ${
                                   item.status === 'PAID' ? 'bg-emerald-500' : 'bg-rose-500'
                                 }`}
                               />
                               {item.status === 'PAID' ? 'Paid' : 'Not Paid'}
                             </button>
-                            {/* Clean print badge */}
                             <span
                               className={`hidden print:inline-block px-2 py-0.5 rounded text-[10px] font-black uppercase ${
                                 item.status === 'PAID' ? 'text-emerald-700' : 'text-rose-700'
@@ -803,7 +902,7 @@ export default function AdminReceiptsPage() {
                       )}
                     </tbody>
                     <tfoot>
-                      <tr className="border-t-2 border-slate-300 font-black text-sm text-[#1B2A4A] bg-slate-50/40">
+                      <tr className="border-t-2 border-slate-300 font-black text-sm text-[#1B2A4A] bg-slate-50">
                         <td className="px-3.5 py-3">Total Amount</td>
                         <td className="px-3.5 py-3 text-right font-mono text-emerald-600 text-base">
                           {formatCurrency(computedViewingTotal)}
@@ -827,14 +926,33 @@ export default function AdminReceiptsPage() {
                 </div>
               </div>
 
-              {viewingReceipt.notes && (
-                <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs text-slate-600">
-                  <strong className="block text-slate-700 mb-0.5 font-semibold">Special Operational Notes:</strong>
-                  {viewingReceipt.notes}
+              {/* Special Operational Notes (Directly editable) */}
+              <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 text-xs text-slate-600 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <strong className="block text-slate-700 font-semibold">Special Operational Notes:</strong>
+                  <span className="text-[10px] text-slate-400 print:hidden">Editable</span>
+                </div>
+                <textarea
+                  rows={2}
+                  value={viewingReceipt.notes || ''}
+                  onChange={(e) => handleUpdateViewingField('notes', e.target.value)}
+                  placeholder="No special operational notes recorded..."
+                  className="print:hidden w-full bg-white border border-slate-200 rounded-lg p-2 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#6B2737]"
+                />
+                {viewingReceipt.notes && (
+                  <p className="hidden print:block text-slate-700">{viewingReceipt.notes}</p>
+                )}
+              </div>
+
+              {/* Save Success Banner */}
+              {saveSuccess && (
+                <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 print:hidden">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                  All updates and totals saved successfully!
                 </div>
               )}
 
-              {/* Verification Footer */}
+              {/* Verification & Action Footer */}
               <div className="border-t border-slate-200 pt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div className="flex items-center gap-2 text-emerald-700 text-xs font-semibold">
                   <ShieldCheck className="w-4 h-4 text-emerald-600" />
@@ -842,6 +960,15 @@ export default function AdminReceiptsPage() {
                 </div>
 
                 <div className="flex items-center gap-2">
+                  <Button
+                    onClick={() => {
+                      setSaveSuccess(true)
+                      setTimeout(() => setSaveSuccess(false), 2500)
+                    }}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs"
+                  >
+                    <Check className="w-3.5 h-3.5 mr-1" /> Save Changes
+                  </Button>
                   <Button
                     onClick={() => window.print()}
                     variant="outline"
