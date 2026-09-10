@@ -3,11 +3,12 @@
 import React, { useState, useEffect } from 'react'
 import {
   FileText, Plus, Search, Download, Printer, ShieldCheck, History,
-  X, CheckCircle2, Edit3, Trash2, Eye, AlertCircle, Save, Check
+  X, CheckCircle2, Edit3, Trash2, Eye, AlertCircle, Save, Check, Image as ImageIcon
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { formatCurrency } from '@/lib/utils'
 import { getLocalReceipts, saveLocalReceipt, deleteLocalReceipt, getDeletedReceipts, addDeletedReceipt } from '@/lib/payments/manualOptions'
+import { downloadReceiptAsImage, downloadReceiptAsPdf } from '@/lib/receiptDownload'
 
 export type ItemStatus = 'PAID' | 'NOT_PAID'
 
@@ -491,11 +492,14 @@ export default function AdminReceiptsPage() {
 
       {/* ── Modal: View Receipt ──────────────────────────────────────────────── */}
       {viewingReceipt && (
-        <div className="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white text-slate-900 rounded-3xl max-w-2xl w-full p-8 space-y-6 shadow-2xl relative border border-slate-200">
+        <div className="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-4 overflow-y-auto print:p-0 print:bg-white print:static print:z-auto">
+          <div
+            id="printable-receipt-slip"
+            className="bg-white text-slate-900 rounded-3xl max-w-2xl w-full p-8 space-y-6 shadow-2xl relative border border-slate-200 print:shadow-none print:border-none print:p-2 print:max-w-none"
+          >
             <button
               onClick={() => setViewingReceipt(null)}
-              className="absolute top-5 right-5 text-slate-400 hover:text-slate-700 p-1.5 rounded-full hover:bg-slate-100"
+              className="print:hidden absolute top-5 right-5 text-slate-400 hover:text-slate-700 p-1.5 rounded-full hover:bg-slate-100"
             >
               <X className="w-5 h-5" />
             </button>
@@ -661,17 +665,27 @@ export default function AdminReceiptsPage() {
                 <span>Digitally Authenticated &amp; Recorded in SourceDeliveryPro Ledger</span>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2 print:hidden">
                 <Button
                   onClick={() => window.print()}
                   variant="outline"
                   className="text-xs border-slate-300 text-slate-700 hover:bg-slate-100"
+                  title="Print Statement using browser printer or PDF destination"
                 >
                   <Printer className="w-3.5 h-3.5 mr-1" /> Print Statement
                 </Button>
                 <Button
-                  onClick={() => alert(`Downloading signed PDF receipt ${viewingReceipt.receiptNumber}...`)}
-                  className="bg-[#6B2737] hover:bg-[#521b28] text-white font-bold text-xs"
+                  onClick={() => downloadReceiptAsImage(viewingReceipt)}
+                  variant="outline"
+                  className="text-xs border-slate-300 text-slate-700 hover:bg-slate-100 font-semibold"
+                  title="Download commercial receipt slip as PNG image"
+                >
+                  <ImageIcon className="w-3.5 h-3.5 mr-1 text-[#6B2737]" /> Download Image
+                </Button>
+                <Button
+                  onClick={() => downloadReceiptAsPdf(viewingReceipt)}
+                  className="bg-[#6B2737] hover:bg-[#521b28] text-white font-bold text-xs shadow-xs"
+                  title="Download commercial receipt slip as official PDF document"
                 >
                   <Download className="w-3.5 h-3.5 mr-1" /> Download PDF
                 </Button>
