@@ -227,17 +227,17 @@ export function PaymentOptionsModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm overflow-y-auto">
-      <div className="relative w-full max-w-3xl my-8 bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden text-white">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/80 backdrop-blur-sm p-2 sm:p-4 flex items-start sm:items-center justify-center">
+      <div className="relative w-full max-w-3xl my-auto bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden text-white max-h-[92vh] flex flex-col">
         
-        {/* Header */}
-        <div className="px-6 py-5 bg-[#1B2A4A] border-b border-[#243660] flex items-center justify-between">
+        {/* Header (Pinned at Top) */}
+        <div className="px-5 sm:px-6 py-4 sm:py-5 bg-[#1B2A4A] border-b border-[#243660] flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
             <div className="p-2.5 rounded-xl bg-[#6B2737] text-white">
               <CreditCard className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-lg font-black text-white">Select Payment Option</h2>
+              <h2 className="text-base sm:text-lg font-black text-white">Select Payment Option</h2>
               <p className="text-xs text-slate-300">
                 Shipment Reference: <span className="font-mono text-amber-300 font-bold">{shipment.trackingNumber || shipment.id}</span>
                 {' · '}
@@ -248,19 +248,20 @@ export function PaymentOptionsModal({
           {onClose && (
             <button
               onClick={onClose}
-              className="text-slate-400 hover:text-white transition p-1 rounded-lg hover:bg-white/10 text-sm"
+              className="text-slate-400 hover:text-white transition p-1.5 rounded-xl hover:bg-white/10 text-sm cursor-pointer"
+              title="Close modal"
             >
-              ✕
+              <X className="w-5 h-5" />
             </button>
           )}
         </div>
 
-        {/* 3 Main Choice Tabs */}
-        <div className="grid grid-cols-3 border-b border-slate-800 bg-slate-950/60 p-2 gap-2 text-xs font-bold">
+        {/* 3 Main Choice Tabs (Pinned) */}
+        <div className="grid grid-cols-3 border-b border-slate-800 bg-slate-950/60 p-2 gap-2 text-xs font-bold shrink-0">
           <button
             type="button"
             onClick={() => setSelectedOption('pay_now')}
-            className={`py-3 px-4 rounded-xl flex items-center justify-center gap-2 transition ${
+            className={`py-2.5 sm:py-3 px-3 sm:px-4 rounded-xl flex items-center justify-center gap-1.5 sm:gap-2 transition ${
               selectedOption === 'pay_now'
                 ? 'bg-[#6B2737] text-white shadow-lg'
                 : 'text-slate-400 hover:text-white hover:bg-slate-900'
@@ -273,20 +274,20 @@ export function PaymentOptionsModal({
           <button
             type="button"
             onClick={() => setSelectedOption('payment_link')}
-            className={`py-3 px-4 rounded-xl flex items-center justify-center gap-2 transition ${
+            className={`py-2.5 sm:py-3 px-3 sm:px-4 rounded-xl flex items-center justify-center gap-1.5 sm:gap-2 transition ${
               selectedOption === 'payment_link'
                 ? 'bg-[#6B2737] text-white shadow-lg'
                 : 'text-slate-400 hover:text-white hover:bg-slate-900'
             }`}
           >
             <Send className="w-4 h-4 text-sky-400" />
-            <span>2. Send Payment Link</span>
+            <span>2. Send Link</span>
           </button>
 
           <button
             type="button"
             onClick={() => setSelectedOption('pay_later')}
-            className={`py-3 px-4 rounded-xl flex items-center justify-center gap-2 transition ${
+            className={`py-2.5 sm:py-3 px-3 sm:px-4 rounded-xl flex items-center justify-center gap-1.5 sm:gap-2 transition ${
               selectedOption === 'pay_later'
                 ? 'bg-[#6B2737] text-white shadow-lg'
                 : 'text-slate-400 hover:text-white hover:bg-slate-900'
@@ -297,9 +298,11 @@ export function PaymentOptionsModal({
           </button>
         </div>
 
-        {/* Tab 1: Pay Now */}
-        {selectedOption === 'pay_now' && (
-          <div className="p-6 sm:p-8 space-y-6">
+        {/* Scrollable Content Container */}
+        <div className="overflow-y-auto flex-1 overscroll-contain">
+          {/* Tab 1: Pay Now */}
+          {selectedOption === 'pay_now' && (
+            <div className="p-5 sm:p-8 space-y-6">
             {submitted ? (
               <div className="text-center py-8 space-y-4">
                 <div className="w-16 h-16 bg-emerald-500/20 text-emerald-400 rounded-full flex items-center justify-center mx-auto border border-emerald-500/30">
@@ -817,6 +820,7 @@ export function PaymentOptionsModal({
           </div>
         )}
 
+        </div>
       </div>
     </div>
   )
