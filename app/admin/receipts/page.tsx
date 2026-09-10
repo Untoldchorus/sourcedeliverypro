@@ -384,7 +384,7 @@ export default function AdminReceiptsPage() {
               <tr>
                 <th className="p-3">Receipt # &amp; Rev</th>
                 <th className="p-3">Customer Profile</th>
-                <th className="p-3">Associated AWB</th>
+                <th className="p-3">Tracking Number</th>
                 <th className="p-3">Payment Provider &amp; Ref</th>
                 <th className="p-3">Total Amount</th>
                 <th className="p-3">Status</th>
@@ -551,7 +551,7 @@ export default function AdminReceiptsPage() {
               <div>
                 <span className="font-bold text-slate-400 uppercase text-[10px] block mb-1">Consignment Telemetry</span>
                 <p className="text-slate-600">
-                  Associated AWB: <strong className="font-mono text-[#6B2737]">{viewingReceipt.trackingNumber}</strong>
+                  Tracking Number: <strong className="font-mono text-[#6B2737]">{viewingReceipt.trackingNumber}</strong>
                 </p>
                 <p className="text-slate-600 mt-0.5">
                   Payment Method: <strong className="text-slate-800">{viewingReceipt.paymentMethod}</strong>
@@ -751,7 +751,7 @@ export default function AdminReceiptsPage() {
                 </div>
 
                 <div>
-                  <label className="block text-slate-400 font-bold mb-1">Associated AWB / Tracking #</label>
+                  <label className="block text-slate-400 font-bold mb-1">Tracking Number</label>
                   <input
                     type="text"
                     value={editingReceipt.trackingNumber}

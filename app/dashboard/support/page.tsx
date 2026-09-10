@@ -123,7 +123,7 @@ export default function SupportTicketsPage() {
                   <th className="p-3">Ticket #</th>
                   <th className="p-3">Subject</th>
                   <th className="p-3">Category</th>
-                  <th className="p-3">Associated AWB</th>
+                  <th className="p-3">Tracking Number</th>
                   <th className="p-3">Last Activity</th>
                   <th className="p-3">Status</th>
                   <th className="p-3 text-right">Action</th>
@@ -210,7 +210,7 @@ export default function SupportTicketsPage() {
               </div>
 
               <div>
-                <label className="block font-semibold mb-1">Associated AWB / Tracking # (Optional)</label>
+                <label className="block font-semibold mb-1">Tracking Number (Optional)</label>
                 <input
                   type="text"
                   value={shipmentAWB}

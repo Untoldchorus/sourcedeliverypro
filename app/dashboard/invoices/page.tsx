@@ -109,7 +109,7 @@ export default function InvoicesPage() {
             <thead className="bg-slate-50 text-slate-400 font-bold uppercase border-b">
               <tr>
                 <th className="p-4">Invoice #</th>
-                <th className="p-4">Associated AWB</th>
+                <th className="p-4">Tracking Number</th>
                 <th className="p-4">Due Date</th>
                 <th className="p-4">Amount</th>
                 <th className="p-4">Status</th>

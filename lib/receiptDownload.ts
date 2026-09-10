@@ -190,8 +190,8 @@ export function renderReceiptToCanvas(receipt: AdminReceipt): HTMLCanvasElement 
 
   ctx.font = `normal ${12 * scale}px system-ui, -apple-system, sans-serif`
   ctx.fillStyle = '#475569'
-  ctx.fillText('Associated AWB: ', c2X + cPad, currY + 38 * scale)
-  const awbLblW = ctx.measureText('Associated AWB: ').width
+  ctx.fillText('Tracking Number: ', c2X + cPad, currY + 38 * scale)
+  const awbLblW = ctx.measureText('Tracking Number: ').width
 
   ctx.font = `bold ${12 * scale}px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace`
   ctx.fillStyle = '#6B2737'
