@@ -5,22 +5,22 @@ import { Button } from '@/components/ui/button'
 export default function ServicesPage() {
   const services = [
     {
-      icon: Plane,
-      title: 'SourceDeliveryPro International Priority',
-      speed: '1-3 Business Days',
-      desc: 'Time-definite international express air delivery for urgent documents and consignments to over 220 countries and territories.',
-    },
-    {
       icon: Truck,
-      title: 'SourceDeliveryPro Domestic Express',
-      speed: 'Same Day & Next Morning',
-      desc: 'Intra-country scheduled transport with real-time driver tracking, delivery attempt alerts, and electronic signature capture.',
+      title: 'Standard Courier Service',
+      speed: '3-5 Business Days',
+      desc: 'Reliable and economical door-to-door courier delivery with continuous tracking and electronic proof-of-delivery.',
     },
     {
-      icon: Ship,
-      title: 'Global Ocean & Air Freight',
-      speed: '5-10 Business Days',
-      desc: 'Commercial LCL and FCL cargo consolidation, customs brokering, bonded warehousing, and dedicated freight forwarders.',
+      icon: Plane,
+      title: 'Usual Courier Service',
+      speed: '2-3 Business Days',
+      desc: 'Everyday prompt scheduled courier transit for commercial packages, priority cartons, and time-sensitive documents.',
+    },
+    {
+      icon: Clock,
+      title: 'Over Night Express Service',
+      speed: 'Next Morning Delivery',
+      desc: 'Top-priority expedited courier handling and flight dispatch for urgent overnight door-to-door delivery.',
     },
     {
       icon: Globe,

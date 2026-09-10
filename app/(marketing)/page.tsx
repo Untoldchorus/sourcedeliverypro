@@ -138,9 +138,9 @@ export default function HomePage() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {[
-            { icon: Plane, title: 'International Express', desc: 'Door-to-door air courier to 220+ destinations in 1–3 business days with customs cleared.', href: '/services#international', accent: '#6B2737' },
-            { icon: Truck, title: 'Domestic Priority', desc: 'Same-day and next-morning delivery with signature confirmation and proof-of-delivery.', href: '/services#domestic', accent: '#243660' },
-            { icon: Ship, title: 'Heavy Cargo & Freight', desc: 'Palletized air and ocean freight forwarding with warehousing and logistics agents.', href: '/services#freight', accent: '#6B2737' },
+            { icon: Truck, title: 'Standard Courier Service', desc: 'Door-to-door courier shipping to 220+ destinations with transparent tracking and digital proof.', href: '/services', accent: '#6B2737' },
+            { icon: Plane, title: 'Usual Courier Service', desc: 'Everyday prompt scheduled courier transit for commercial packages and personal parcels.', href: '/services', accent: '#243660' },
+            { icon: Clock, title: 'Over Night Express Service', desc: 'Top-priority overnight air courier transit with expedited customs and morning delivery.', href: '/services', accent: '#6B2737' },
             { icon: Building, title: 'Business Solutions', desc: 'Volume discounts, dedicated account managers, bulk uploads and shipping APIs.', href: '/business', accent: '#243660' },
           ].map((card) => (
             <div key={card.title} className="group bg-white rounded-2xl border border-slate-100 shadow-sm hover:shadow-xl transition-all duration-200 hover:-translate-y-1 overflow-hidden">

@@ -124,7 +124,21 @@ function formatTimestamp(ts: string): string {
 }
 
 function formatServiceType(s: string): string {
-  return s.split('_').map((w) => w.charAt(0) + w.slice(1).toLowerCase()).join(' ')
+  if (!s) return 'Standard Courier Service'
+  const v = s.toUpperCase()
+  if (v.includes('NIGHT') || v.includes('OVER_NIGHT') || v === 'EXPRESS') {
+    return 'Over Night Express Service'
+  }
+  if (v.includes('USUAL') || v.includes('PRIORITY')) {
+    return 'Usual Courier Service'
+  }
+  if (v.includes('STANDARD') || v.includes('AIR') || v.includes('FREIGHT') || v.includes('ECONOMY')) {
+    return 'Standard Courier Service'
+  }
+  if (s === 'Standard Courier Service' || s === 'Usual Courier Service' || s === 'Over Night Express Service') {
+    return s
+  }
+  return 'Standard Courier Service'
 }
 
 // ─── Admin localStorage merge ─────────────────────────────────────────────────

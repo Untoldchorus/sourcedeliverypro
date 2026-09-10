@@ -10,17 +10,12 @@ import {
 import { calculateShippingRate } from '@/lib/pricing'
 
 export function normalizeServiceType(val?: string): string {
-  if (!val) return 'INTERNATIONAL_EXPRESS'
+  if (!val) return 'STANDARD'
   const v = val.toUpperCase().trim()
-  if (v === 'STANDARD_AIR' || v === 'STANDARD') return 'STANDARD'
-  if (v === 'HEAVY_FREIGHT' || v === 'FREIGHT') return 'FREIGHT'
-  if (v === 'DOMESTIC_EXPRESS' || v === 'EXPRESS') return 'EXPRESS'
-  if (v === 'DOMESTIC_STANDARD' || v === 'ECONOMY_GROUND' || v === 'ECONOMY') return 'ECONOMY'
-  if (v === 'SAME_DAY') return 'SAME_DAY'
-  if (v === 'NEXT_DAY') return 'NEXT_DAY'
-  if (v === 'PRIORITY') return 'PRIORITY'
-  if (v === 'INTERNATIONAL_STANDARD') return 'INTERNATIONAL_STANDARD'
-  return 'INTERNATIONAL_EXPRESS'
+  if (v.includes('NIGHT') || v.includes('OVERNIGHT') || v.includes('OVER_NIGHT') || v === 'EXPRESS') return 'EXPRESS'
+  if (v.includes('USUAL') || v.includes('PRIORITY')) return 'PRIORITY'
+  if (v.includes('STANDARD') || v === 'STANDARD') return 'STANDARD'
+  return 'STANDARD'
 }
 
 export function normalizeShipmentStatus(val?: string): string {

@@ -163,7 +163,7 @@ export default function AdminReceiptsPage() {
             Commercial Receipt Management (`receipts.*`)
           </h1>
           <p className="text-xs text-slate-400 mt-1">
-            View official commercial invoices, edit customer billing &amp; revisions (v1, v2...), void records, or permanently delete receipts.
+            View official commercial invoices, edit customer billing details, void records, or permanently delete receipts.
           </p>
         </div>
 
@@ -230,9 +230,6 @@ export default function AdminReceiptsPage() {
                 <tr key={r.id} className="hover:bg-slate-800/40 transition-colors">
                   <td className="p-3 font-mono font-bold text-white">
                     {r.receiptNumber}
-                    <span className="ml-2 text-[10px] px-2 py-0.5 rounded bg-slate-800 text-amber-400 border border-amber-400/20">
-                      v{r.version || 1}
-                    </span>
                   </td>
                   <td className="p-3">
                     <span className="font-bold text-white block text-sm">{r.customerName}</span>
@@ -243,17 +240,11 @@ export default function AdminReceiptsPage() {
                     <span className="font-mono text-slate-300 block">{r.paymentRef}</span>
                     <span className="text-[10px] text-slate-500">{r.paymentMethod}</span>
                   </td>
-                  <td className="p-3 font-bold text-emerald-400 text-sm">{formatCurrency(r.total)}</td>
+                  <td className="p-3 font-bold text-white">{formatCurrency(r.total)}</td>
                   <td className="p-3">
                     <span
-                      className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                        r.status === 'PAID'
-                          ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                          : r.status === 'VOID'
-                          ? 'bg-red-500/10 text-red-400 border border-red-500/20'
-                          : r.status === 'REFUNDED'
-                          ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20'
-                          : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                      className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold border ${
+                        statusBadges[r.status] || 'bg-slate-800 text-slate-300 border-slate-700'
                       }`}
                     >
                       {r.status}
@@ -263,9 +254,10 @@ export default function AdminReceiptsPage() {
                     {/* View Receipt */}
                     <Button
                       size="sm"
+                      variant="ghost"
                       onClick={() => setViewingReceipt(r)}
-                      className="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs px-2.5 py-1"
-                      title="View Official Receipt"
+                      className="text-xs text-slate-300 hover:text-white"
+                      title="View Receipt Details"
                     >
                       <Eye className="w-3.5 h-3.5 mr-1" /> View
                     </Button>
@@ -275,7 +267,7 @@ export default function AdminReceiptsPage() {
                       size="sm"
                       onClick={() => setEditingReceipt({ ...r })}
                       className="bg-[#6B2737] hover:bg-[#521b28] text-white text-xs px-2.5 py-1"
-                      title="Edit Receipt Details & Bump Revision"
+                      title="Edit Receipt Details"
                     >
                       <Edit3 className="w-3.5 h-3.5 mr-1" /> Edit
                     </Button>
@@ -363,9 +355,6 @@ export default function AdminReceiptsPage() {
                 <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Official Receipt</span>
                 <span className="font-mono text-base font-black text-[#1B2A4A]">{viewingReceipt.receiptNumber}</span>
                 <div className="flex items-center sm:justify-end gap-2 mt-1">
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 font-bold text-slate-600">
-                    Revision v{viewingReceipt.version || 1}
-                  </span>
                   <span
                     className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold ${
                       viewingReceipt.status === 'PAID'
@@ -472,21 +461,21 @@ export default function AdminReceiptsPage() {
 
             <div className="border-b border-slate-800 pb-3">
               <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider">
-                Revision &amp; Audit Engine
+                Receipt Engine
               </span>
               <h2 className="text-xl font-black text-white flex items-center gap-2 mt-1">
                 <Edit3 className="w-5 h-5 text-[#6B2737]" />
                 Edit Receipt: {editingReceipt.receiptNumber}
               </h2>
               <p className="text-xs text-slate-400 mt-0.5">
-                Saving changes will advance this record from version <strong className="text-white">v{editingReceipt.version || 1}</strong> to <strong className="text-amber-400">v{(editingReceipt.version || 1) + 1}</strong>.
+                Update and manage commercial receipt details.
               </p>
             </div>
 
             {saveSuccess && (
               <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 p-3 rounded-xl flex items-center gap-2 text-xs font-bold">
                 <CheckCircle2 className="w-4 h-4" />
-                Receipt revision saved successfully!
+                Receipt saved successfully!
               </div>
             )}
 
@@ -612,7 +601,7 @@ export default function AdminReceiptsPage() {
                   type="submit"
                   className="bg-[#6B2737] hover:bg-[#521b28] text-white font-bold text-xs"
                 >
-                  <Save className="w-3.5 h-3.5 mr-1" /> Save &amp; Advance to v{(editingReceipt.version || 1) + 1}
+                  <Save className="w-3.5 h-3.5 mr-1" /> Save Changes
                 </Button>
               </div>
             </form>

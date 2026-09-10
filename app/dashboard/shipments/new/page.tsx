@@ -40,7 +40,7 @@ export default function NewShipmentPage() {
 
     weight: '',
     dimensions: '',
-    service: 'INTERNATIONAL_EXPRESS',
+    service: 'Standard Courier Service',
     description: '',
   })
 
@@ -327,10 +327,9 @@ export default function NewShipmentPage() {
                   onChange={handleChange}
                   className="w-full border border-slate-300 rounded-xl p-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-[#6B2737] bg-white"
                 >
-                  <option value="INTERNATIONAL_EXPRESS">International Express (1-3 Days)</option>
-                  <option value="STANDARD_AIR">Standard Tracked Air (5-7 Days)</option>
-                  <option value="HEAVY_FREIGHT">Heavy Freight Cargo</option>
-                  <option value="DOMESTIC_EXPRESS">Domestic Same-Day</option>
+                  <option value="Standard Courier Service">Standard Courier Service</option>
+                  <option value="Usual Courier Service">Usual Courier Service</option>
+                  <option value="Over Night Express Service">Over Night Express Service</option>
                 </select>
               </div>
               <div className="space-y-1 sm:col-span-3">

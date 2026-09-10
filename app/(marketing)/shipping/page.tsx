@@ -68,7 +68,7 @@ export default function CreateShipmentPage() {
     isDangerousGoods: false,
 
     // Step 4: Service
-    serviceType: 'EXPRESS',
+    serviceType: 'Standard Courier Service',
 
     // Step 5: Options
     requiresSignature: false,
@@ -397,9 +397,9 @@ export default function CreateShipmentPage() {
             </h2>
             <div className="space-y-3">
               {[
-                { id: 'EXPRESS', name: 'International Priority Express', time: '1-3 Business Days', desc: 'Fastest door-to-door delivery with direct flight dispatch.' },
-                { id: 'STANDARD', name: 'Standard Tracked Air', time: '5-7 Business Days', desc: 'Economical international courier with full tracking.' },
-                { id: 'SAME_DAY', name: 'Same Day Air (Domestic)', time: 'Today', desc: 'Immediate dispatch by dedicated courier.' },
+                { id: 'Standard Courier Service', name: 'Standard Courier Service', time: '3-5 Business Days', desc: 'Dependable and economical courier shipping with end-to-end tracking.' },
+                { id: 'Usual Courier Service', name: 'Usual Courier Service', time: '2-3 Business Days', desc: 'Everyday prompt door-to-door courier service for parcels and freight.' },
+                { id: 'Over Night Express Service', name: 'Over Night Express Service', time: 'Next Morning Delivery', desc: 'Fastest priority courier dispatch with overnight direct transit.' },
               ].map((svc) => (
                 <label
                   key={svc.id}

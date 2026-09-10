@@ -638,11 +638,9 @@ export default function AdminEditEverythingShipmentPage() {
                 onChange={(e) => setFormData({ ...formData, serviceType: e.target.value })}
                 className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs"
               >
-                <option value="INTERNATIONAL_EXPRESS">International Express Air</option>
-                <option value="STANDARD_AIR">Standard Air Cargo</option>
-                <option value="HEAVY_FREIGHT">Heavy Freight &amp; Ocean Pallet</option>
-                <option value="DOMESTIC_PRIORITY">Domestic Priority Express</option>
-                <option value="ECONOMY_GROUND">Economy Ground Transport</option>
+                <option value="Standard Courier Service">Standard Courier Service</option>
+                <option value="Usual Courier Service">Usual Courier Service</option>
+                <option value="Over Night Express Service">Over Night Express Service</option>
               </select>
             </div>
             <div>

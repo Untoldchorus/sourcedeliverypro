@@ -24,11 +24,11 @@ interface PricingRule {
 const defaultRules: PricingRule[] = [
   {
     id: 'PRC-001',
-    name: 'Domestic Standard',
-    serviceType: 'DOMESTIC_STANDARD',
+    name: 'Standard Courier Service',
+    serviceType: 'Standard Courier Service',
     zone: 'Domestic',
-    baseRate: 12.00,
-    perKgRate: 1.50,
+    baseRate: 15.00,
+    perKgRate: 2.00,
     fuelSurcharge: 8,
     insuranceRate: 1.5,
     remoteAreaSurcharge: 15.00,
@@ -39,11 +39,26 @@ const defaultRules: PricingRule[] = [
   },
   {
     id: 'PRC-002',
-    name: 'International Express',
-    serviceType: 'INTERNATIONAL_EXPRESS',
+    name: 'Usual Courier Service',
+    serviceType: 'Usual Courier Service',
+    zone: 'Regional',
+    baseRate: 25.00,
+    perKgRate: 3.50,
+    fuelSurcharge: 10,
+    insuranceRate: 2.0,
+    remoteAreaSurcharge: 20.00,
+    minWeight: 0.1,
+    maxWeight: 50,
+    currency: 'USD',
+    isActive: true,
+  },
+  {
+    id: 'PRC-003',
+    name: 'Over Night Express Service',
+    serviceType: 'Over Night Express Service',
     zone: 'International',
     baseRate: 45.00,
-    perKgRate: 8.50,
+    perKgRate: 6.50,
     fuelSurcharge: 12,
     insuranceRate: 2.5,
     remoteAreaSurcharge: 25.00,
@@ -52,59 +67,12 @@ const defaultRules: PricingRule[] = [
     currency: 'USD',
     isActive: true,
   },
-  {
-    id: 'PRC-003',
-    name: 'Standard Air',
-    serviceType: 'STANDARD_AIR',
-    zone: 'International',
-    baseRate: 30.00,
-    perKgRate: 5.00,
-    fuelSurcharge: 10,
-    insuranceRate: 2.0,
-    remoteAreaSurcharge: 20.00,
-    minWeight: 0.5,
-    maxWeight: 50,
-    currency: 'USD',
-    isActive: true,
-  },
-  {
-    id: 'PRC-004',
-    name: 'Heavy Freight',
-    serviceType: 'HEAVY_FREIGHT',
-    zone: 'International',
-    baseRate: 120.00,
-    perKgRate: 3.20,
-    fuelSurcharge: 15,
-    insuranceRate: 1.8,
-    remoteAreaSurcharge: 50.00,
-    minWeight: 30,
-    maxWeight: 1000,
-    currency: 'USD',
-    isActive: true,
-  },
-  {
-    id: 'PRC-005',
-    name: 'Economy Ground',
-    serviceType: 'ECONOMY_GROUND',
-    zone: 'Domestic',
-    baseRate: 8.00,
-    perKgRate: 0.80,
-    fuelSurcharge: 6,
-    insuranceRate: 1.0,
-    remoteAreaSurcharge: 10.00,
-    minWeight: 0.1,
-    maxWeight: 20,
-    currency: 'USD',
-    isActive: false,
-  },
 ]
 
 const serviceTypeColors: Record<string, string> = {
-  DOMESTIC_STANDARD: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/30',
-  INTERNATIONAL_EXPRESS: 'text-[#6B2737] bg-orange-500/10 border-orange-500/30',
-  STANDARD_AIR: 'text-blue-400 bg-blue-500/10 border-blue-500/30',
-  HEAVY_FREIGHT: 'text-violet-400 bg-violet-500/10 border-violet-500/30',
-  ECONOMY_GROUND: 'text-slate-400 bg-slate-800/50 border-slate-700',
+  'Standard Courier Service': 'text-blue-400 bg-blue-500/10 border-blue-500/30',
+  'Usual Courier Service': 'text-cyan-400 bg-cyan-500/10 border-cyan-500/30',
+  'Over Night Express Service': 'text-[#6B2737] bg-orange-500/10 border-orange-500/30',
 }
 
 export default function PricingTariffsPage() {
@@ -113,7 +81,7 @@ export default function PricingTariffsPage() {
   const [showAdd, setShowAdd] = useState(false)
   const [saved, setSaved] = useState(false)
   const [newRule, setNewRule] = useState<Partial<PricingRule>>({
-    name: '', serviceType: 'DOMESTIC_STANDARD', zone: 'Domestic',
+    name: '', serviceType: 'Standard Courier Service', zone: 'Domestic',
     baseRate: 0, perKgRate: 0, fuelSurcharge: 0, insuranceRate: 0,
     remoteAreaSurcharge: 0, minWeight: 0, maxWeight: 100, currency: 'USD', isActive: true,
   })
@@ -288,8 +256,8 @@ export default function PricingTariffsPage() {
                   <select value={editingRule.serviceType}
                     onChange={(e) => setEditingRule({ ...editingRule, serviceType: e.target.value })}
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none">
-                    {['DOMESTIC_STANDARD','ECONOMY_GROUND','STANDARD_AIR','INTERNATIONAL_EXPRESS','HEAVY_FREIGHT'].map((s) => (
-                      <option key={s} value={s}>{s.replace(/_/g,' ')}</option>
+                    {['Standard Courier Service', 'Usual Courier Service', 'Over Night Express Service'].map((s) => (
+                      <option key={s} value={s}>{s}</option>
                     ))}
                   </select>
                 </div>
@@ -343,8 +311,8 @@ export default function PricingTariffsPage() {
                   <label className="block text-slate-400 font-bold mb-1">Service Type</label>
                   <select value={newRule.serviceType} onChange={(e) => setNewRule({ ...newRule, serviceType: e.target.value })}
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none">
-                    {['DOMESTIC_STANDARD','ECONOMY_GROUND','STANDARD_AIR','INTERNATIONAL_EXPRESS','HEAVY_FREIGHT'].map((s) => (
-                      <option key={s} value={s}>{s.replace(/_/g,' ')}</option>
+                    {['Standard Courier Service', 'Usual Courier Service', 'Over Night Express Service'].map((s) => (
+                      <option key={s} value={s}>{s}</option>
                     ))}
                   </select>
                 </div>

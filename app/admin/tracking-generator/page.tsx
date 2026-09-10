@@ -24,7 +24,7 @@ export default function TrackingGeneratorPage() {
     recipientEmail: '',
     origin: '',
     destination: '',
-    service: 'INTERNATIONAL_EXPRESS',
+    service: 'Standard Courier Service',
     weight: '',
     estimatedDelivery: '',
   })
@@ -101,7 +101,7 @@ export default function TrackingGeneratorPage() {
           recipientName: form.recipientName,
           origin: form.origin,
           destination: form.destination,
-          service: form.service.replace(/_/g, ' '),
+          service: form.service,
           estimatedDelivery: form.estimatedDelivery,
         }),
       })
@@ -171,8 +171,12 @@ export default function TrackingGeneratorPage() {
                 <label className="block text-slate-400 font-bold mb-1">Service Type</label>
                 <select value={form.service} onChange={(e) => setForm({...form, service: e.target.value})}
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none">
-                  {['DOMESTIC_STANDARD','INTERNATIONAL_EXPRESS','STANDARD_AIR','HEAVY_FREIGHT','ECONOMY_GROUND'].map(s => (
-                    <option key={s} value={s}>{s.replace(/_/g,' ')}</option>
+                  {[
+                    'Standard Courier Service',
+                    'Usual Courier Service',
+                    'Over Night Express Service',
+                  ].map(s => (
+                    <option key={s} value={s}>{s}</option>
                   ))}
                 </select>
               </div>
@@ -244,7 +248,7 @@ export default function TrackingGeneratorPage() {
 
               <div className="border-t border-slate-800 pt-3 text-[10px] text-slate-500 space-y-1">
                 <p>📦 {form.origin} → {form.destination}</p>
-                <p>🚚 {form.service.replace(/_/g,' ')}</p>
+                <p>🚚 {form.service}</p>
                 <p>📅 ETA: {form.estimatedDelivery || 'TBD'}</p>
               </div>
             </div>

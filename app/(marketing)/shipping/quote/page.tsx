@@ -25,7 +25,7 @@ export default function ShippingQuotePage() {
     length: 30,
     width: 20,
     height: 15,
-    serviceType: 'EXPRESS',
+    serviceType: 'Standard Courier Service',
     packageType: 'PARCEL',
     declaredValue: 150,
     requiresInsurance: true,
@@ -188,12 +188,9 @@ export default function ShippingQuotePage() {
                 onChange={(e) => setFormData({ ...formData, serviceType: e.target.value })}
                 className="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#6B2737]"
               >
-                <option value="SAME_DAY">Same Day Express (Immediate delivery)</option>
-                <option value="NEXT_DAY">Next Day Air Priority</option>
-                <option value="EXPRESS">International Express (1-3 Days)</option>
-                <option value="PRIORITY">Priority Parcel (3-4 Days)</option>
-                <option value="STANDARD">Standard Tracked (5-7 Days)</option>
-                <option value="FREIGHT">Heavy Cargo / Freight (Palletized)</option>
+                <option value="Standard Courier Service">Standard Courier Service</option>
+                <option value="Usual Courier Service">Usual Courier Service</option>
+                <option value="Over Night Express Service">Over Night Express Service</option>
               </select>
             </div>
 

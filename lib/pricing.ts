@@ -56,41 +56,27 @@ export function calculateShippingRate(input: QuoteInput): QuoteResult {
   let transitDays = 3
 
   switch (input.serviceType) {
+    case 'Over Night Express Service':
     case 'SAME_DAY':
-      baseRatePerKg = isDomestic ? 35.00 : 75.00
-      transitDays = 0
-      break
     case 'NEXT_DAY':
+    case 'EXPRESS':
+    case 'INTERNATIONAL_EXPRESS':
       baseRatePerKg = isDomestic ? 22.00 : 55.00
       transitDays = 1
       break
-    case 'EXPRESS':
-      baseRatePerKg = isDomestic ? 16.00 : 40.00
-      transitDays = 2
-      break
+    case 'Usual Courier Service':
     case 'PRIORITY':
       baseRatePerKg = isDomestic ? 13.00 : 32.00
       transitDays = 3
       break
+    case 'Standard Courier Service':
     case 'STANDARD':
+    case 'STANDARD_AIR':
+    case 'INTERNATIONAL_STANDARD':
+    case 'FREIGHT':
+    case 'ECONOMY':
       baseRatePerKg = isDomestic ? 8.50 : 20.00
       transitDays = 5
-      break
-    case 'INTERNATIONAL_EXPRESS':
-      baseRatePerKg = 45.00
-      transitDays = 2
-      break
-    case 'INTERNATIONAL_STANDARD':
-      baseRatePerKg = 24.00
-      transitDays = 6
-      break
-    case 'FREIGHT':
-      baseRatePerKg = 5.50
-      transitDays = 7
-      break
-    case 'ECONOMY':
-      baseRatePerKg = 6.00
-      transitDays = 8
       break
     default:
       baseRatePerKg = 15.00

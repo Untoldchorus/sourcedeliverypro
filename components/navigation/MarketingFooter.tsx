@@ -6,10 +6,9 @@ import { Package } from 'lucide-react'
 // ─── Data ──────────────────────────────────────────────────────
 
 const services = [
-  { label: 'Domestic Shipping', href: '/services#domestic' },
-  { label: 'International', href: '/services#international' },
-  { label: 'Air Freight', href: '/services#air-express' },
-  { label: 'Sea Cargo', href: '/services#freight' },
+  { label: 'Standard Courier Service', href: '/services' },
+  { label: 'Usual Courier Service', href: '/services' },
+  { label: 'Over Night Express Service', href: '/services' },
   { label: 'Package Tracking', href: '/tracking' },
 ]
 
