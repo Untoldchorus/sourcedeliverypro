@@ -3,12 +3,34 @@ import { MapPin, Phone, Clock, Search, ShieldCheck } from 'lucide-react'
 export default function LocationsPage() {
   const hubs = [
     {
+      code: 'SAC-HQ-01',
+      name: 'Main Corporate Headquarters',
+      address: '500 Capitol Mall, Sacramento, CA 95814, United States',
+      hours: 'Mon - Fri: 08:00 - 18:00',
+      phone: '(618) 368 1268',
+      services: ['Executive Office', 'Express Dispatch', 'Customer Support', 'Billing'],
+      badge: 'Main Headquarters',
+      badgeClass: 'bg-[#6B2737]/15 text-[#6B2737] font-bold',
+    },
+    {
+      code: 'IPH-BR-01',
+      name: 'Asia-Pacific Regional Branch Office',
+      address: '27 Jalan Sultan Idris Shah, 30000 Ipoh, Perak, Malaysia',
+      hours: 'Mon - Sat: 08:30 - 18:30',
+      phone: '+60 5-254 0100',
+      services: ['Regional Branch', 'Express Drop-off', 'Customs Support', 'Sea & Air Freight'],
+      badge: 'Regional Branch',
+      badgeClass: 'bg-blue-100 text-blue-800 font-bold',
+    },
+    {
       code: 'NYC-HUB-01',
       name: 'New York JFK International Air Hub',
       address: 'Bldg 141 Cargo Area, JFK Airport, Jamaica, NY 11430',
       hours: 'Mon - Sun: Open 24 Hours',
       phone: '+1 (718) 555-0144',
       services: ['Air Express', 'Drop-off', 'Customs Clearance', 'Freight'],
+      badge: 'Operational',
+      badgeClass: 'bg-emerald-100 text-emerald-800',
     },
     {
       code: 'LON-HUB-02',
@@ -17,6 +39,8 @@ export default function LocationsPage() {
       hours: 'Mon - Sun: Open 24 Hours',
       phone: '+44 20 8759 0021',
       services: ['Air Express', 'Drop-off', 'Customs Brokerage', 'Bonded Storage'],
+      badge: 'Operational',
+      badgeClass: 'bg-emerald-100 text-emerald-800',
     },
     {
       code: 'LOS-HUB-03',
@@ -25,6 +49,8 @@ export default function LocationsPage() {
       hours: 'Mon - Sat: 07:00 - 22:00',
       phone: '+234 1 271 9000',
       services: ['Express Dispatch', 'Drop-off', 'Door-to-Door Delivery'],
+      badge: 'Operational',
+      badgeClass: 'bg-emerald-100 text-emerald-800',
     },
     {
       code: 'FRA-HUB-04',
@@ -33,6 +59,8 @@ export default function LocationsPage() {
       hours: 'Mon - Sun: Open 24 Hours',
       phone: '+49 69 690 70000',
       services: ['Intercontinental Freight', 'Express Sort', 'Temperature Controlled'],
+      badge: 'Operational',
+      badgeClass: 'bg-emerald-100 text-emerald-800',
     },
   ]
 
@@ -56,8 +84,8 @@ export default function LocationsPage() {
                 <span className="text-xs font-mono font-bold text-slate-400">{hub.code}</span>
                 <h3 className="font-bold text-lg text-[#1B2A4A] mt-0.5">{hub.name}</h3>
               </div>
-              <span className="px-2.5 py-1 bg-emerald-100 text-emerald-800 text-xs font-semibold rounded-full">
-                Operational
+              <span className={`px-2.5 py-1 text-xs rounded-full ${hub.badgeClass}`}>
+                {hub.badge}
               </span>
             </div>
 

@@ -195,6 +195,7 @@ function baseTemplate(content: string): string {
     <div class="footer">
       <p>&copy; ${new Date().getFullYear()} <a href="${domain}" style="color: #6B7280; text-decoration: none; font-weight: 600;">SourceDeliveryPro</a>. All rights reserved.</p>
       <p>Official Global Logistics Portal: <a href="${domain}" style="color: #6B2737; font-weight: bold; text-decoration: none;">www.sourcedeliverypro.com</a> | Support: <a href="tel:+16183681268" style="color: #6B2737; font-weight: bold; text-decoration: none;">(618) 368 1268</a></p>
+      <p style="font-size:11px;color:#9CA3AF;margin-top:6px;">Main: 500 Capitol Mall, Sacramento, CA 95814 | Branch: 27 Jalan Sultan Idris Shah, 30000 Ipoh, Perak, Malaysia</p>
       <p>You're receiving this email because you have an active shipment or account with SourceDeliveryPro.</p>
     </div>
   </div>

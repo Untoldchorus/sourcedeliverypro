@@ -214,7 +214,7 @@ export default function NewShipmentPage() {
                   name="senderAddress"
                   value={formData.senderAddress}
                   onChange={handleChange}
-                  placeholder="e.g. 450 Logistics Blvd, Suite 200"
+                  placeholder="e.g. 500 Capitol Mall, Suite 200"
                   className="w-full border border-slate-300 rounded-xl p-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-[#6B2737]"
                 />
               </div>

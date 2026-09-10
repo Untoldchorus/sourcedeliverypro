@@ -41,6 +41,7 @@ export async function POST(req: NextRequest) {
       </div>
       <div style="background: #1B2A4A; padding: 20px; border-radius: 0 0 12px 12px; text-align: center;">
         <p style="color: #C9B8B0; font-size: 12px; margin: 0;">© 2026 <a href="https://www.sourcedeliverypro.com" style="color: #ffffff; text-decoration: none; font-weight: bold;">SourceDeliveryPro</a> · <a href="https://www.sourcedeliverypro.com" style="color: #C9B8B0; text-decoration: underline;">www.sourcedeliverypro.com</a></p>
+        <p style="color: #8A9AB5; font-size: 11px; margin: 4px 0 0;">Main: 500 Capitol Mall, Sacramento, CA 95814 | Branch: 27 Jalan Sultan Idris Shah, 30000 Ipoh, Perak, Malaysia</p>
       </div>
     </body>
     </html>

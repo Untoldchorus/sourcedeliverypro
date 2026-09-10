@@ -64,11 +64,14 @@ export default function ContactPage() {
         {/* Info Col */}
         <div className="lg:col-span-5 space-y-6">
           <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm space-y-4">
-            <h3 className="font-bold text-lg text-[#1B2A4A]">Global Headquarters</h3>
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-lg text-[#1B2A4A]">Global Headquarters</h3>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#6B2737]/10 text-[#6B2737]">Main Office</span>
+            </div>
             <div className="space-y-3 text-xs text-slate-600">
               <p className="flex items-start gap-2.5">
                 <MapPin className="w-4 h-4 text-[#6B2737] shrink-0 mt-0.5" />
-                <span>450 Logistics Blvd, Suite 800, New York, NY 10001, United States</span>
+                <span>500 Capitol Mall, Sacramento, CA 95814, United States</span>
               </p>
               <p className="flex items-center gap-2.5">
                 <Phone className="w-4 h-4 text-[#6B2737] shrink-0" />
@@ -77,6 +80,23 @@ export default function ContactPage() {
               <p className="flex items-center gap-2.5">
                 <Mail className="w-4 h-4 text-[#6B2737] shrink-0" />
                 <span>dispatch@sourcedeliverypro.com</span>
+              </p>
+            </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-lg text-[#1B2A4A]">Asia-Pacific Branch</h3>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">Branch Office</span>
+            </div>
+            <div className="space-y-3 text-xs text-slate-600">
+              <p className="flex items-start gap-2.5">
+                <MapPin className="w-4 h-4 text-[#6B2737] shrink-0 mt-0.5" />
+                <span>27 Jalan Sultan Idris Shah, 30000 Ipoh, Perak, Malaysia</span>
+              </p>
+              <p className="flex items-center gap-2.5">
+                <Mail className="w-4 h-4 text-[#6B2737] shrink-0" />
+                <span>support@sourcedeliverypro.com</span>
               </p>
             </div>
           </div>

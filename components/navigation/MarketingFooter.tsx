@@ -161,11 +161,25 @@ export function MarketingFooter() {
             <ul className="space-y-3 text-sm mb-8" style={{ color: '#8A9AB5' }}>
               <li className="flex items-start gap-2">
                 <span className="mt-0.5 text-base">📍</span>
-                <span>
-                  1200 Logistics Blvd, Suite 400
-                  <br />
-                  Atlanta, GA 30301, USA
-                </span>
+                <div>
+                  <div className="text-xs font-bold text-[#C9B8B0]">Main Office:</div>
+                  <span>
+                    500 Capitol Mall
+                    <br />
+                    Sacramento, CA 95814
+                  </span>
+                </div>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="mt-0.5 text-base">🏢</span>
+                <div>
+                  <div className="text-xs font-bold text-[#C9B8B0]">Branch Office:</div>
+                  <span>
+                    27 Jalan Sultan Idris Shah
+                    <br />
+                    30000 Ipoh, Perak, Malaysia
+                  </span>
+                </div>
               </li>
               <li className="flex items-center gap-2">
                 <span className="text-base">📞</span>

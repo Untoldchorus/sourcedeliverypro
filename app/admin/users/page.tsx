@@ -31,7 +31,7 @@ const DEFAULT_USERS: AdminUser[] = [
     status: 'ACTIVE',
     lastLogin: 'Today',
     company: 'SourceDeliveryPro Command Hub',
-    address: '1200 Logistics Blvd, Atlanta, GA 30301, USA',
+    address: '500 Capitol Mall, Sacramento, CA 95814',
   },
 ]
 
