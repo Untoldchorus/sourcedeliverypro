@@ -274,6 +274,36 @@ export default function AdminReceiptsPage() {
     setReceipts((prev) => prev.map((item) => (item.id === r.id ? updated : item)))
   }
 
+  // Toggle line item status in view receipt modal
+  const handleToggleViewingItemStatus = (itemId: string) => {
+    if (!viewingReceipt) return
+    const currentItems = getReceiptItems(viewingReceipt)
+    const updatedItems = currentItems.map((it) =>
+      it.id === itemId
+        ? { ...it, status: (((it.status || 'PAID') === 'PAID' ? 'NOT_PAID' : 'PAID') as ItemStatus) }
+        : it
+    )
+    const enabled = updatedItems.filter((i) => i.enabled !== false)
+    const allPaid = enabled.length > 0 && enabled.every((i) => i.status === 'PAID')
+    const nonePaid = enabled.length > 0 && enabled.every((i) => i.status === 'NOT_PAID')
+    const nextStatus = viewingReceipt.status === 'VOID'
+      ? 'VOID'
+      : nonePaid
+      ? 'DRAFT'
+      : allPaid
+      ? 'PAID'
+      : 'PARTIALLY_PAID'
+
+    const updatedReceipt: AdminReceipt = {
+      ...viewingReceipt,
+      items: updatedItems,
+      status: nextStatus,
+    }
+    setViewingReceipt(updatedReceipt)
+    saveLocalReceipt(updatedReceipt)
+    setReceipts((prev) => prev.map((r) => (r.id === updatedReceipt.id ? updatedReceipt : r)))
+  }
+
   // Filtered list
   const filtered = receipts.filter((r) => {
     if (!r) return false
@@ -531,35 +561,90 @@ export default function AdminReceiptsPage() {
 
             {/* Line Items */}
             <div className="space-y-2 text-xs">
-              <div className="flex justify-between py-2 border-b border-slate-200 font-bold text-slate-500 uppercase text-[10px]">
-                <span>Description &amp; Freight Breakdown</span>
-                <span>Amount (USD)</span>
-              </div>
-              {viewingReceipt.items && viewingReceipt.items.filter((it) => it.enabled).length > 0 ? (
-                viewingReceipt.items
-                  .filter((it) => it.enabled)
-                  .map((it) => (
-                    <div key={it.id} className="flex justify-between py-2 border-b border-slate-100">
-                      <span className="text-slate-700">{it.description}</span>
-                      <span className="font-mono font-medium">{formatCurrency(it.amount)}</span>
-                    </div>
-                  ))
-              ) : (
-                <>
-                  <div className="flex justify-between py-2 border-b border-slate-100">
-                    <span className="text-slate-700">Consignment Freight Charge &amp; Handling</span>
-                    <span className="font-mono font-medium">{formatCurrency(viewingReceipt.subtotal)}</span>
-                  </div>
-                  <div className="flex justify-between py-2 border-b border-slate-100">
-                    <span className="text-slate-700">Customs Clearance, Handling &amp; Insurance Tax</span>
-                    <span className="font-mono font-medium">{formatCurrency(viewingReceipt.tax)}</span>
-                  </div>
-                </>
-              )}
-              <div className="flex justify-between py-3 border-t-2 border-slate-300 font-black text-sm text-[#1B2A4A]">
-                <span>Total Amount Paid</span>
-                <span className="font-mono text-emerald-600 text-base">{formatCurrency(viewingReceipt.total)}</span>
-              </div>
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-slate-200 font-bold text-slate-500 uppercase text-[10px]">
+                    <th className="text-left py-2">Description &amp; Freight Breakdown</th>
+                    <th className="text-right py-2 w-32">Amount (USD)</th>
+                    <th className="text-center py-2 w-28">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {viewingReceipt.items && viewingReceipt.items.filter((it) => it.enabled).length > 0 ? (
+                    viewingReceipt.items
+                      .filter((it) => it.enabled)
+                      .map((it) => {
+                        const isPaid = (it.status || 'PAID') === 'PAID'
+                        return (
+                          <tr key={it.id} className="border-b border-slate-100">
+                            <td className="py-2 text-slate-700">{it.description}</td>
+                            <td className="py-2 text-right font-mono font-medium">{formatCurrency(it.amount)}</td>
+                            <td className="py-2 text-center">
+                              <button
+                                type="button"
+                                onClick={() => handleToggleViewingItemStatus(it.id)}
+                                className={`inline-flex items-center justify-center px-2.5 py-0.5 rounded-full text-[10px] font-bold border transition-colors cursor-pointer ${
+                                  isPaid
+                                    ? 'bg-emerald-100 text-emerald-800 border-emerald-300 hover:bg-emerald-200'
+                                    : 'bg-rose-100 text-rose-800 border-rose-300 hover:bg-rose-200'
+                                }`}
+                                title="Click to toggle Paid / Not Paid"
+                              >
+                                {isPaid ? 'Paid' : 'Not Paid'}
+                              </button>
+                            </td>
+                          </tr>
+                        )
+                      })
+                  ) : (
+                    <>
+                      <tr className="border-b border-slate-100">
+                        <td className="py-2 text-slate-700">Consignment Freight Charge &amp; Handling</td>
+                        <td className="py-2 text-right font-mono font-medium">{formatCurrency(viewingReceipt.subtotal)}</td>
+                        <td className="py-2 text-center">
+                          <span className="inline-flex items-center justify-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                            Paid
+                          </span>
+                        </td>
+                      </tr>
+                      <tr className="border-b border-slate-100">
+                        <td className="py-2 text-slate-700">Customs Clearance, Handling &amp; Insurance Tax</td>
+                        <td className="py-2 text-right font-mono font-medium">{formatCurrency(viewingReceipt.tax)}</td>
+                        <td className="py-2 text-center">
+                          <span className="inline-flex items-center justify-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                            Paid
+                          </span>
+                        </td>
+                      </tr>
+                    </>
+                  )}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t-2 border-slate-300 font-black text-sm text-[#1B2A4A]">
+                    <td className="py-3">Total Amount Paid</td>
+                    <td className="py-3 text-right font-mono text-emerald-600 text-base">
+                      {formatCurrency(viewingReceipt.total)}
+                    </td>
+                    <td className="py-3 text-center">
+                      <span
+                        className={`inline-flex items-center justify-center px-2.5 py-0.5 rounded-full text-[10px] font-black border ${
+                          viewingReceipt.status === 'PAID'
+                            ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                            : viewingReceipt.status === 'PARTIALLY_PAID'
+                            ? 'bg-amber-100 text-amber-800 border-amber-300'
+                            : 'bg-rose-100 text-rose-800 border-rose-300'
+                        }`}
+                      >
+                        {viewingReceipt.status === 'PAID'
+                          ? 'PAID'
+                          : viewingReceipt.status === 'PARTIALLY_PAID'
+                          ? 'PARTIAL'
+                          : viewingReceipt.status || 'PAID'}
+                      </span>
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
             </div>
 
             {viewingReceipt.notes && (
