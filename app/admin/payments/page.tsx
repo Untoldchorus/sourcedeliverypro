@@ -1039,24 +1039,35 @@ export default function AdminPaymentsPage() {
               <table className="w-full text-xs">
                 <thead>
                   <tr className="border-b text-slate-400 uppercase text-[10px]">
-                    <th className="text-left py-2">Description</th>
-                    <th className="text-right py-2">Amount</th>
+                    <th className="text-left py-2">Description &amp; Freight Breakdown</th>
+                    <th className="text-right py-2 w-28">Amount (USD)</th>
+                    <th className="text-center py-2 w-24">Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200">
                   <tr>
                     <td className="py-2.5 font-medium text-slate-800">
-                      Freight Express Cargo &amp; Priority Air Courier
+                      Consignment Freight Charge &amp; Handling
                       <span className="block text-[10px] text-slate-400">AWB: {viewingReceipt.trackingNumber}</span>
                     </td>
                     <td className="py-2.5 text-right font-mono font-bold text-slate-800">
                       {formatCurrency(viewingReceipt.subtotal)}
                     </td>
+                    <td className="py-2.5 text-center">
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300">
+                        Paid
+                      </span>
+                    </td>
                   </tr>
                   <tr>
-                    <td className="py-2 text-slate-500">Customs Clearance &amp; Handling Surcharge (8%)</td>
-                    <td className="py-2 text-right font-mono text-slate-500">
+                    <td className="py-2 text-slate-600">Customs Clearance, Handling &amp; Insurance Tax</td>
+                    <td className="py-2 text-right font-mono text-slate-600">
                       {formatCurrency(viewingReceipt.tax)}
+                    </td>
+                    <td className="py-2 text-center">
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300">
+                        Paid
+                      </span>
                     </td>
                   </tr>
                 </tbody>
@@ -1065,6 +1076,11 @@ export default function AdminPaymentsPage() {
                     <td className="pt-3 text-[#1B2A4A]">Total Paid</td>
                     <td className="pt-3 text-right text-emerald-600 font-mono">
                       {formatCurrency(viewingReceipt.total)}
+                    </td>
+                    <td className="pt-3 text-center">
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                        PAID
+                      </span>
                     </td>
                   </tr>
                 </tfoot>
