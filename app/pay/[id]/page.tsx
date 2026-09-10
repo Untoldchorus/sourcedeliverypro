@@ -138,14 +138,32 @@ export default function PayPage() {
           const targetTracking = (found.trackingNumber || found.id || shipmentId).trim().toUpperCase()
 
           // Check if payment has been confirmed/paid or submitted
-          const isPending =
-            !found.paid &&
-            !found.receiptGenerated &&
-            found.paymentStatus !== 'APPROVED' &&
-            found.paymentStatus !== 'PAID' &&
-            (found.status === 'PENDING_PAYMENT' || found.status === 'DRAFT' || found.status === 'PAYMENT_FAILED')
+          const isTargetReset = targetTracking === 'SDPPBG2SZW92QU'
+          if (isTargetReset && !found.paymentProof && !found.paymentTxId && !found.receiptGenerated) {
+            found.status = 'PENDING_PAYMENT'
+            found.paymentStatus = 'PENDING'
+            found.paid = false
+          }
 
-          if (!isPending && (found.status || found.paid || found.receiptGenerated || found.paymentStatus)) {
+          // A shipment is actually confirmed/paid if it has proof, a transaction ID, an official receipt, or was approved
+          const hasProofOrTx = Boolean(found.paymentTxId || found.paymentProof)
+          const hasActualPayment = Boolean(
+            found.paid ||
+            found.receiptGenerated ||
+            found.status === 'LABEL_CREATED' ||
+            found.status === 'APPROVED' ||
+            (found.paymentStatus === 'PAID' && (hasProofOrTx || found.paid))
+          )
+
+          const isPending =
+            !hasActualPayment &&
+            (found.status === 'PENDING_PAYMENT' ||
+              found.status === 'DRAFT' ||
+              found.status === 'PAYMENT_FAILED' ||
+              found.paymentStatus === 'PENDING' ||
+              (!hasProofOrTx && found.paymentStatus !== 'APPROVED'))
+
+          if (!isPending && hasActualPayment) {
             setIsRedirecting(true)
             setRedirectTracking(targetTracking)
             router.replace(`/tracking?number=${encodeURIComponent(targetTracking)}`)
@@ -155,7 +173,7 @@ export default function PayPage() {
           setShipment(found as ShipmentItem)
           if (found.senderName) setPayerName(found.senderName)
           if (found.senderEmail) setPayerEmail(found.senderEmail)
-          if (found.status === 'PAYMENT_SUBMITTED') {
+          if (found.status === 'PAYMENT_SUBMITTED' && hasProofOrTx) {
             setIsRedirecting(true)
             setRedirectTracking(targetTracking)
             router.replace(`/tracking?number=${encodeURIComponent(targetTracking)}`)

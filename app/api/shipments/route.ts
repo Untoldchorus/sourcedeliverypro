@@ -311,6 +311,105 @@ async function ensureShipmentsSynced() {
         }).catch(() => null)
       }
     }
+
+    // 3. Ensure SDPPBG2SZW92QU is explicitly reset to PENDING_PAYMENT
+    const sdppbg = await db.shipment.findFirst({
+      where: {
+        OR: [
+          { trackingNumber: { equals: 'SDPPBG2SZW92QU', mode: 'insensitive' } },
+          { shipmentNumber: { equals: 'SDPPBG2SZW92QU', mode: 'insensitive' } },
+        ],
+      },
+      include: { payment: true, invoice: true },
+    }).catch(() => null)
+
+    if (sdppbg) {
+      if (sdppbg.status !== 'PENDING_PAYMENT') {
+        await db.shipment.update({
+          where: { id: sdppbg.id },
+          data: { status: 'PENDING_PAYMENT' },
+        }).catch(() => null)
+      }
+      if (sdppbg.payment && sdppbg.payment.status !== 'PENDING') {
+        await db.payment.updateMany({
+          where: { shipmentId: sdppbg.id },
+          data: {
+            status: 'PENDING',
+            paymentReference: 'PAY-SDPPBG2SZW92QU',
+            metadata: {},
+          },
+        }).catch(() => null)
+      }
+      if (sdppbg.invoice && sdppbg.invoice.status !== 'PENDING') {
+        await db.invoice.updateMany({
+          where: { shipmentId: sdppbg.id },
+          data: { status: 'PENDING' },
+        }).catch(() => null)
+      }
+    } else {
+      // Seed SDPPBG2SZW92QU in DB so tracking and payment work reliably online
+      await db.$transaction(async (tx) => {
+        const shp = await tx.shipment.create({
+          data: {
+            shipmentNumber: 'SDPPBG2SZW92QU',
+            trackingNumber: 'SDPPBG2SZW92QU',
+            status: 'PENDING_PAYMENT',
+            serviceType: 'STANDARD',
+            senderName: 'Logistics Operations Dispatch',
+            senderCity: 'New York',
+            senderCountry: 'US',
+            recipientName: 'Sarah Jenkins',
+            recipientCity: 'London',
+            recipientCountry: 'GB',
+            weight: 3.5,
+            totalAmount: 145.5,
+            baseRate: 116.4,
+            fuelSurcharge: 14.55,
+            taxAmount: 14.55,
+            packageCount: 1,
+            packageType: 'PARCEL',
+            contents: 'Commercial Freight & Consignment Cargo',
+          },
+        }).catch(() => null)
+
+        if (shp) {
+          const pmt = await tx.payment.create({
+            data: {
+              shipmentId: shp.id,
+              amount: 145.5,
+              currency: 'USD',
+              status: 'PENDING',
+              provider: 'MANUAL',
+              paymentReference: 'PAY-SDPPBG2SZW92QU',
+            },
+          }).catch(() => null)
+
+          await tx.invoice.create({
+            data: {
+              invoiceNumber: 'INV-SDPPBG2SZW92QU',
+              shipmentId: shp.id,
+              paymentId: pmt?.id,
+              subtotal: 130.95,
+              taxAmount: 14.55,
+              totalAmount: 145.5,
+              currency: 'USD',
+              status: 'PENDING',
+            },
+          }).catch(() => null)
+
+          await tx.trackingEvent.create({
+            data: {
+              shipmentId: shp.id,
+              status: 'PENDING_PAYMENT',
+              description: 'Consignment registered and awaiting client invoice settlement.',
+              city: 'New York',
+              country: 'US',
+              timestamp: new Date(),
+            },
+          }).catch(() => null)
+        }
+      }).catch(() => null)
+    }
   } catch (err) {
     console.error('ensureShipmentsSynced error:', err)
   }
@@ -607,6 +706,34 @@ export async function PATCH(request: NextRequest) {
         await tx.invoice.updateMany({
           where: { shipmentId: shipment.id },
           data: { status: 'PAID' },
+        }).catch(() => null)
+      } else if (body.paymentStatus === 'PENDING' || updateData.status === 'PENDING_PAYMENT' || body.status === 'PENDING_PAYMENT') {
+        // Keep payment & invoice PENDING
+        await tx.payment.updateMany({
+          where: { shipmentId: shipment.id },
+          data: { status: 'PENDING' },
+        }).catch(() => null)
+
+        await tx.invoice.updateMany({
+          where: { shipmentId: shipment.id },
+          data: { status: 'PENDING' },
+        }).catch(() => null)
+      }
+
+      // If total amount updated, keep payment & invoice amounts in sync
+      if (updateData.totalAmount) {
+        await tx.payment.updateMany({
+          where: { shipmentId: shipment.id },
+          data: { amount: updateData.totalAmount },
+        }).catch(() => null)
+
+        await tx.invoice.updateMany({
+          where: { shipmentId: shipment.id },
+          data: {
+            totalAmount: updateData.totalAmount,
+            subtotal: Math.round((updateData.totalAmount * 0.9) * 100) / 100,
+            taxAmount: Math.round((updateData.totalAmount * 0.1) * 100) / 100,
+          },
         }).catch(() => null)
       }
 

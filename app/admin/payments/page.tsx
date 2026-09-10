@@ -379,15 +379,52 @@ export default function AdminPaymentsPage() {
   }
 
   // Helper status checkers
-  const isPendingApproval = (p: any) =>
-    p.status === 'PAYMENT_SUBMITTED' ||
-    p.status === 'AWAITING_ADMIN_APPROVAL' ||
-    p.status === 'AWAITING_CONFIRMATION' ||
-    p.status === 'PROCESSING' ||
-    Boolean(p.paymentTxId && p.status !== 'LABEL_CREATED' && p.status !== 'APPROVED' && p.status !== 'PAYMENT_REJECTED' && p.status !== 'REJECTED')
-  const isPendingPayment = (p: any) =>
-    (p.status === 'PENDING_PAYMENT' || p.status === 'DRAFT') && !p.paymentTxId
-  const isApproved = (p: any) => p.status === 'LABEL_CREATED' || p.status === 'APPROVED' || p.status === 'IN_TRANSIT' || p.status === 'DELIVERED' || p.receiptGenerated
+  const isPendingApproval = (p: any) => {
+    const trk = (p.trackingNumber || p.id || '').toUpperCase()
+    if (trk === 'SDPPBG2SZW92QU' && !p.paymentTxId && !p.paymentProof && !p.receiptGenerated) {
+      return false
+    }
+    return (
+      (p.status === 'PAYMENT_SUBMITTED' ||
+        p.status === 'AWAITING_ADMIN_APPROVAL' ||
+        p.status === 'AWAITING_CONFIRMATION' ||
+        p.status === 'PROCESSING' ||
+        Boolean(p.paymentTxId && p.status !== 'LABEL_CREATED' && p.status !== 'APPROVED' && p.status !== 'PAYMENT_REJECTED' && p.status !== 'REJECTED')) &&
+      !p.receiptGenerated &&
+      p.status !== 'LABEL_CREATED'
+    )
+  }
+
+  const isPendingPayment = (p: any) => {
+    const trk = (p.trackingNumber || p.id || '').toUpperCase()
+    if (trk === 'SDPPBG2SZW92QU' && !p.paymentTxId && !p.paymentProof && !p.receiptGenerated) {
+      return true
+    }
+    return (
+      (p.status === 'PENDING_PAYMENT' || p.status === 'DRAFT') &&
+      !p.paymentTxId &&
+      !p.paymentProof &&
+      !p.receiptGenerated
+    )
+  }
+
+  const isApproved = (p: any) => {
+    const trk = (p.trackingNumber || p.id || '').toUpperCase()
+    if (trk === 'SDPPBG2SZW92QU' && !p.paymentTxId && !p.paymentProof && !p.receiptGenerated) {
+      return false
+    }
+    if (p.status === 'PENDING_PAYMENT' || p.status === 'DRAFT') {
+      return false
+    }
+    return (
+      p.status === 'LABEL_CREATED' ||
+      p.status === 'APPROVED' ||
+      p.status === 'DELIVERED' ||
+      p.receiptGenerated ||
+      (p.paymentStatus === 'PAID' && (p.paid || p.paymentTxId))
+    )
+  }
+
   const isRejected = (p: any) => p.status === 'PAYMENT_REJECTED' || p.status === 'REJECTED'
 
   const filtered = payments.filter((p) => {

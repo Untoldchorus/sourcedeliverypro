@@ -317,7 +317,7 @@ export function PaymentOptionsModal({
                       Your official payment receipt will be delivered automatically to <strong className="font-mono text-white underline">{payerEmail}</strong> once approved.
                     </span>
                   )}
-                  <span className="block mt-1">Status is now <span className="text-amber-400 font-bold">Payment Confirmed</span>.</span>
+                  <span className="block mt-1">Status is now <span className="text-amber-400 font-bold">Payment Submitted (Awaiting Verification)</span>.</span>
                 </p>
 
                 <div className="flex items-center justify-center gap-2 p-3 bg-emerald-950/40 border border-emerald-500/30 rounded-2xl text-xs text-emerald-300 font-bold animate-pulse max-w-md mx-auto">

@@ -46,7 +46,7 @@ export default function AdminEditEverythingShipmentPage() {
     id: shipmentId,
     trackingNumber: shipmentId.startsWith('SDP') ? shipmentId : `SDP${shipmentId.slice(-4).toUpperCase()}992X`,
     refNumber: `REF-2026-${shipmentId}`,
-    status: 'IN_TRANSIT',
+    status: 'PENDING_PAYMENT',
     serviceType: 'INTERNATIONAL_EXPRESS',
     estimatedDelivery: 'Sep 10, 2026',
     actualDelivery: '',
@@ -96,7 +96,7 @@ export default function AdminEditEverythingShipmentPage() {
     fuelSurcharge: '15.00',
     insuranceFee: '10.50',
     totalAmount: '145.50',
-    paymentStatus: 'PAID',
+    paymentStatus: 'PENDING',
     reasonForEdit: '',
 
     // Remarks & timeline
@@ -133,13 +133,37 @@ export default function AdminEditEverythingShipmentPage() {
           } catch {}
         }
 
+        if (!found) {
+          try {
+            const res = await fetch('/api/shipments')
+            const json = await res.json()
+            if (json.success && Array.isArray(json.data)) {
+              found = json.data.find(
+                (s: any) =>
+                  (s.id && s.id.toString().toLowerCase() === shipmentId.toLowerCase()) ||
+                  (s.trackingNumber && s.trackingNumber.toString().toLowerCase() === shipmentId.toLowerCase())
+              )
+            }
+          } catch {}
+        }
+
         if (found) {
+          const isActuallyPaid = Boolean(
+            found.paid ||
+            found.receiptGenerated ||
+            found.status === 'LABEL_CREATED' ||
+            found.status === 'APPROVED' ||
+            (found.paymentStatus === 'PAID' && (found.paymentTxId || found.paid))
+          )
+          const resolvedPaymentStatus = found.paymentStatus || (isActuallyPaid ? 'PAID' : 'PENDING')
+
           setFormData((prev) => ({
             ...prev,
             ...found,
             id: found.id || found.trackingNumber || shipmentId,
             trackingNumber: found.trackingNumber || found.awb || prev.trackingNumber,
-            status: found.status || prev.status,
+            status: found.status || prev.status || 'PENDING_PAYMENT',
+            paymentStatus: resolvedPaymentStatus,
             serviceType: found.serviceType || found.service || prev.serviceType,
             currentLocation: found.currentLocation || found.location || prev.currentLocation,
             mapQuery: found.mapQuery || prev.mapQuery,
@@ -168,28 +192,43 @@ export default function AdminEditEverythingShipmentPage() {
     if (isSaving) return
     setIsSaving(true)
     try {
-      saveLocalShipment(formData)
+      const isPaid = formData.paymentStatus === 'PAID'
+      const updatedShipment = {
+        ...formData,
+        amount: parseFloat(formData.totalAmount) || 0,
+        totalAmount: parseFloat(formData.totalAmount) || 0,
+        paymentStatus: formData.paymentStatus,
+        paid: isPaid,
+        // Prevent accidental approval if payment status is still PENDING
+        status: (formData.paymentStatus === 'PENDING' && (formData.status === 'LABEL_CREATED' || formData.status === 'APPROVED'))
+          ? 'PENDING_PAYMENT'
+          : formData.status,
+      }
+
+      saveLocalShipment(updatedShipment)
 
       // Sync to database
       await fetch('/api/shipments', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          id: formData.id,
-          trackingNumber: formData.trackingNumber,
-          status: formData.status,
-          serviceType: formData.serviceType,
-          weight: formData.weight,
-          amount: formData.totalAmount,
-          senderName: formData.senderName,
-          senderCity: formData.senderCity,
-          recipientName: formData.recipientName,
-          recipientCity: formData.recipientCity,
-          currentLocation: formData.currentLocation,
-          mapQuery: formData.mapQuery,
-          showMap: formData.showMap !== undefined ? Boolean(formData.showMap) : true,
-          timelineEvents: formData.events && formData.events.length > 0 ? formData.events : undefined,
-          remark: formData.remarks?.[0]?.text || `Shipment details updated by Operations Admin.`,
+          id: updatedShipment.id,
+          trackingNumber: updatedShipment.trackingNumber,
+          status: updatedShipment.status,
+          paymentStatus: updatedShipment.paymentStatus,
+          serviceType: updatedShipment.serviceType,
+          weight: updatedShipment.weight,
+          amount: updatedShipment.totalAmount,
+          totalAmount: updatedShipment.totalAmount,
+          senderName: updatedShipment.senderName,
+          senderCity: updatedShipment.senderCity,
+          recipientName: updatedShipment.recipientName,
+          recipientCity: updatedShipment.recipientCity,
+          currentLocation: updatedShipment.currentLocation,
+          mapQuery: updatedShipment.mapQuery,
+          showMap: updatedShipment.showMap !== undefined ? Boolean(updatedShipment.showMap) : true,
+          timelineEvents: updatedShipment.events && updatedShipment.events.length > 0 ? updatedShipment.events : undefined,
+          remark: updatedShipment.remarks?.[0]?.text || `Shipment details updated by Operations Admin.`,
         }),
       }).catch((err) => console.warn('DB patch warning:', err))
 
@@ -827,8 +866,8 @@ export default function AdminEditEverythingShipmentPage() {
                 onChange={(e) => setFormData({ ...formData, paymentStatus: e.target.value })}
                 className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-amber-400 font-bold text-xs"
               >
-                <option value="PAID">PAID</option>
                 <option value="PENDING">PENDING</option>
+                <option value="PAID">PAID</option>
                 <option value="REFUNDED">REFUNDED</option>
               </select>
             </div>

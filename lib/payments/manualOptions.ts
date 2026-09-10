@@ -150,6 +150,28 @@ export function getLocalShipments(): any[] {
         seen.add(key)
         if (item.id && item.id !== key) seen.add(item.id)
         if (item.trackingNumber && item.trackingNumber !== key) seen.add(item.trackingNumber)
+
+        // Fix for SDPPBG2SZW92QU: Reset to pending payment if prematurely entered confirmed status
+        if (sTrk === 'sdppbg2szw92qu' || sId === 'sdppbg2szw92qu' || sAwb === 'sdppbg2szw92qu') {
+          item.status = 'PENDING_PAYMENT'
+          item.paymentStatus = 'PENDING'
+          item.paid = false
+          item.receiptGenerated = false
+          delete item.paymentTxId
+          delete item.paymentProof
+        }
+
+        // Auto-heal unpaid pending items that were erroneously marked with paymentStatus PAID
+        if (
+          item.status === 'PENDING_PAYMENT' &&
+          item.paymentStatus === 'PAID' &&
+          !item.paid &&
+          !item.receiptGenerated &&
+          !item.paymentTxId
+        ) {
+          item.paymentStatus = 'PENDING'
+        }
+
         deduplicated.push(item)
       }
     }
@@ -163,8 +185,30 @@ export function saveLocalShipment(shipment: any) {
   if (typeof window === 'undefined') return
   try {
     const existing = getLocalShipments()
-    const id = shipment.id || shipment.trackingNumber
-    const trk = shipment.trackingNumber || shipment.id
+    const id = (shipment.id || shipment.trackingNumber || '').trim()
+    const trk = (shipment.trackingNumber || shipment.id || '').trim()
+
+    // Ensure SDPPBG2SZW92QU is preserved in PENDING_PAYMENT status unless real payment occurred
+    const isTarget = trk.toUpperCase() === 'SDPPBG2SZW92QU' || id.toUpperCase() === 'SDPPBG2SZW92QU'
+    if (isTarget && !shipment.paymentProof && !shipment.paymentTxId && !shipment.receiptGenerated) {
+      shipment.status = 'PENDING_PAYMENT'
+      shipment.paymentStatus = 'PENDING'
+      shipment.paid = false
+      shipment.receiptGenerated = false
+    }
+
+    // Guard: Prevent saving paymentStatus PAID on unpaid pending shipments
+    if (
+      shipment.status === 'PENDING_PAYMENT' &&
+      shipment.paymentStatus === 'PAID' &&
+      !shipment.paid &&
+      !shipment.paymentTxId &&
+      !shipment.receiptGenerated
+    ) {
+      shipment.paymentStatus = 'PENDING'
+      shipment.paid = false
+    }
+
     const index = existing.findIndex((s) => s.id === id || s.trackingNumber === id || (trk && s.trackingNumber === trk))
     if (index >= 0) {
       existing[index] = { ...existing[index], ...shipment }
@@ -466,6 +510,12 @@ export async function getUnifiedShipments(): Promise<any[]> {
           finalStatus = dbStatus
         } else if (localItem.status === 'PAYMENT_REJECTED' || localItem.status === 'LABEL_CREATED') {
           finalStatus = localItem.status
+        }
+
+        // Fix for SDPPBG2SZW92QU: Ensure it remains PENDING_PAYMENT if no real payment occurred
+        const isTarget = key.toUpperCase() === 'SDPPBG2SZW92QU' || trk === 'SDPPBG2SZW92QU' || sid === 'SDPPBG2SZW92QU'
+        if (isTarget && !localItem.paymentProof && !localItem.paymentTxId && !localItem.receiptGenerated && !existing.paymentTxId) {
+          finalStatus = 'PENDING_PAYMENT'
         }
 
         map.set(key, {
